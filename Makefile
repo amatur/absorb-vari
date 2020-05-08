@@ -17,11 +17,15 @@ BCALMFILE=/Users/Sherlock/amaturWS/data2019/staphsub/$K/list_reads.unitigs.fa
 #all: $(SOURCES) $(EXECUTABLE) decoderd
 all: $(SOURCES) $(EXECUTABLE)
 
-$(EXECUTABLE): $(OBJECTS) *.hpp
+$(EXECUTABLE): $(OBJECTS)
 	$(CC) $(OBJECTS) -o $@
 
-.cpp.o:
+#rule to build sources
+.cpp.o: 
 	$(CC) $(CFLAGS) $< -o $@
+
+#tell that any header change should cause a rebuild
+main.cpp: *.hpp
 
 decoderd: decoder.cpp
 	$(CC) $(CFLAGS) decoder.cpp -o decoder.o
@@ -55,10 +59,11 @@ tip:
 
 run:
 	rm -f global_stat
+	./main.out -i  $(BCALMFILE) -k $(K) -m 10
 	#./main.out -i  $(BCALMFILE) -k $(K) -f 1 -m 15 > myout.txt
 	#./decoder.out -i tipOutput.txt -k $(K) > decot.txt
 	#./main.out -i  $(BCALMFILE) -k $(K) -f 1 -m 10 -a 1
-	./main.out -i  $(BCALMFILE) -k $(K) -m 10 -a 1
+	
 
 	#/Volumes/exFAT/work/validation.sh $(BCALMFILE) $(K) 
 	#./gzipper.sh

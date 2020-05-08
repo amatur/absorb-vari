@@ -4,6 +4,28 @@
 #include "absorbGraph.hpp"
 #include "global.hpp"
 #include "decoder.hpp"
+#include <ctime>
+#include <random>
+#include <sys/time.h>
+#include <sys/resource.h>
+#define MEM_ENV_VAR 1024
+
+
+void setmemlimit();
+
+void setmemlimit()
+{
+        struct rlimit memlimit;
+        long bytes;
+
+//        if(MEM_ENV_VAR!=NULL)
+//        {
+                bytes = (512)*(1024*1024);
+                memlimit.rlim_cur = bytes;
+                memlimit.rlim_max = bytes;
+                setrlimit(RLIMIT_AS, &memlimit);
+//        }
+}
 
 class GroupMerger {
 public:
@@ -24,8 +46,8 @@ public:
 };
 
 class DisjointSet {
+    //unordered_map<int, int> parent;
     unordered_map<int, int> parent;
-    
 public:
     DisjointSet() {
     }
@@ -59,7 +81,6 @@ public:
     size_t V = adjList.size();
     int time = 0;
     
-    char* color;
     int* p_dfs;
     bool* saturated;
     struct node_sorter * sortStruct;
@@ -112,7 +133,7 @@ public:
     
     void indegreePopulate(){
         int xc = 0;
-        for(vector<edge_t> elist: adjList){
+        for(auto elist: adjList){
             for(edge_t e: elist){
                 global_indegree[e.toNode] += 1;
                 sortStruct[e.toNode].sortkey = sortStruct[e.toNode].sortkey + 1;
@@ -184,7 +205,7 @@ public:
         }
         
         xc = 0; // current vertex while traversing the adjacency list
-        for(vector<edge_t> elist: adjList){
+        for(auto elist: adjList){
             int neighborCount = 0;
             int spNeighborCount[2];
             spNeighborCount[0]=0;
@@ -196,7 +217,7 @@ public:
                 //ENDPOINT SIDE UPPER BOUND - improved
                     for(edge_t e_xy: elist){    //central node: all neighbors of x
                         int y = e_xy.toNode;
-                        vector<edge_t> adjY = adjList[y];
+                        auto adjY = adjList[y];
                         bool eligibleSp = true;
 
                         //pair<int, bool> pairr;
@@ -226,7 +247,7 @@ public:
                 //ENDPOINT SIDE UPPER BOUND
                 for(edge_t e_xy: elist){
                     int y = e_xy.toNode;
-                    vector<edge_t> adjY = adjList[y];
+                    auto adjY = adjList[y];
                     bool eligible = true;
                     pair<int, bool> pairr;
                     for(edge_t e_from_y : adjY){
@@ -271,9 +292,9 @@ public:
     
     
     void DFS_visit(int u) {
-        if(MODE_ABSORPTION_TIP){
+        if(MODE_ABSORPTION_TIP || BOTHTIPABSORB || BOTHTIPABSORB_V2){
             if(global_issinksource[u]==1){
-                vector<edge_t> adju = adjList.at(u);
+                auto adju = adjList.at(u);
                 vector<edge_t> myvector;
                 for (edge_t e : adju) {
                     myvector.push_back(e);
@@ -299,9 +320,9 @@ public:
                 time = time + 1;
                 color[x] = 'g';
                 s.push(xEdge);
-                vector<edge_t> adjx = adjList.at(x);
-                if(ALGOMODE == RANDOM_DFS){
-                    random_shuffle ( adjx.begin(), adjx.end() );
+                auto adjx = adjList.at(x);
+                if(ALGOMODE == RANDOM_DFS || 1==1){
+                    random_shuffle ( adjx.begin(), adjx.end(), myrandom);
                 }
                 
                 if(ALGOMODE == EPPRIOR){
@@ -386,14 +407,14 @@ public:
                     }
                     
                     oldToNew[x].pos_in_walk = 1;
-                    oldToNew[x].startPosWithKOverlap = 1;
+                    //oldToNew[x].startPosWithKOverlap = 1;
                     if (u < K) {
-                        oldToNew[x].endPosWithKOVerlap = 1; // do we actually see this? yes
+                        //oldToNew[x].endPosWithKOVerlap = 1; // do we actually see this? yes
                         if(DBGFLAG == UKDEBUG){
                             cout<< "node: "<< x<<"u< k ***** u = "<<u<<endl;
                         }
                     } else {
-                        oldToNew[x].endPosWithKOVerlap = u - K + 1;
+                        //oldToNew[x].endPosWithKOVerlap = u - K + 1;
                     }
                     
                 } else {
@@ -408,15 +429,15 @@ public:
                     }
                     
                     
-                    oldToNew[x].startPosWithKOverlap = oldToNew[p_dfs[x]].endPosWithKOVerlap + 1;
+                    //oldToNew[x].startPosWithKOverlap = oldToNew[p_dfs[x]].endPosWithKOVerlap + 1;
                     oldToNew[x].pos_in_walk = oldToNew[p_dfs[x]].pos_in_walk + 1;
                     if (u < K) {
-                        oldToNew[x].endPosWithKOVerlap = oldToNew[x].startPosWithKOverlap + 1; // do we actually see this? yes
+                        //oldToNew[x].endPosWithKOVerlap = oldToNew[x].startPosWithKOverlap + 1; // do we actually see this? yes
                         if(DBGFLAG == UKDEBUG){
                             cout<< "node: "<< x<<"u< k ***** u = "<<u<<endl;
                         }
                     } else {
-                        oldToNew[x].endPosWithKOVerlap = u - K + (oldToNew[x].startPosWithKOverlap); //check correctness
+                        //oldToNew[x].endPosWithKOVerlap = u - K + (oldToNew[x].startPosWithKOverlap); //check correctness
                     }
                     
                     // x says: Now that I know where my newHome is: I can extend my parent's sequence
@@ -436,7 +457,7 @@ public:
                 for (edge_t yEdge : adjx) { //edge_t yEdge = adjx.at(i);
                     int y = yEdge.toNode;
                     
-                    if(MODE_ABSORPTION_TIP){
+                    if(MODE_ABSORPTION_TIP || BOTHTIPABSORB || BOTHTIPABSORB_V2){
                         if(global_issinksource[y] == true){
                             continue;
                         }
@@ -565,6 +586,9 @@ public:
     
     void DFS() {
         
+        for (int i=0; i<V; i++) {
+            nodeSign[i] = true;
+        }
         if(ALGOMODE == NODEASSIGN){
             for (int i=0; i<V; i++) {
                 nodeSign[i] = true;
@@ -624,14 +648,14 @@ public:
         }
         
         
-        if(ALGOMODE == RANDOM_DFS){
-            for (int i = 0; i < V; i++) {
-                sortStruct[i].node = i;
-                sortStruct[i].sortkey = global_indegree[i];
-            }
+        if(ALGOMODE == RANDOM_DFS || 1==1){
+             for (int i = 0; i < V; i++) {
+                 sortStruct[i].node = i;
+                 sortStruct[i].sortkey = i;
+             }
             vector<struct node_sorter> myvector (sortStruct, sortStruct+V);
             sort (myvector.begin(), myvector.end(), sort_by_key);
-            random_shuffle ( myvector.begin(), myvector.end() );
+            random_shuffle ( myvector.begin(), myvector.end(), myrandom );
             copy(myvector.begin(), myvector.end(), sortStruct);
             
         }
@@ -652,13 +676,13 @@ public:
             color[i] = 'w';
             p_dfs[i] = -1;
         }
-        cout<<"Basic V loop time: "<<readTimer() - time_a<<" sec"<<endl;
+        cout<<"[3.1.0] Basic V loop time: "<<readTimer() - time_a<<" sec"<<endl;
         
         
         time_a = readTimer();
         for (int j = 0; j < V; j++) {
             int i;
-            if(ALGOMODE == OUTDEGREE_DFS || ALGOMODE == OUTDEGREE_DFS_1 || ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1 || ALGOMODE == SOURCEFIRST){
+            if(ALGOMODE == OUTDEGREE_DFS || ALGOMODE == OUTDEGREE_DFS_1 || ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1 || ALGOMODE == SOURCEFIRST || 1==1){
                 i = sortStruct[j].node;
             }else{
                 i = j;
@@ -673,12 +697,12 @@ public:
                 DFS_visit(i);
             }
         }
-        cout<<"DFS time: "<<readTimer() - time_a<<" sec"<<endl;
+        cout<<"[3.1.1] DFS and node assignment time: "<<readTimer() - time_a<<" sec"<<endl;
         
         
         
         
-        cout<<"## START stitching strings: "<<endl;
+        cout<<"[3.1.2] Stitching strings from DFS output... \n";
         time_a = readTimer();
         
         //fix sequences
@@ -702,27 +726,30 @@ public:
             
             C_ustitch += s.length();
         }
-        cout<<"TIME to stitch: "<<readTimer() - time_a<<" sec."<<endl;
+        cout<<"[3.1.2] TIME to stitch: "<<readTimer() - time_a<<" sec."<<endl;
+        ofstream globalStatFile("global_stat", std::fstream::out | std::fstream::app);
+        globalStatFile << "TIME_STITCH_SEC" <<  "=" << readTimer() - time_a << endl;
+        globalStatFile.close();
         
         
-        
-        
-        cout<<"GROUP PRINT"<<endl;
+        cout<<"[3.2] Doing union...."<<endl;
+        time_a = readTimer();
         bool* merged = new bool[countNewNode];
-        obsoleteWalkId = new bool[countNewNode];
+        //obsoleteWalkId = new bool[countNewNode];
         for (int i = 0; i<countNewNode; i++) {
             merged[i] = false;
-            obsoleteWalkId[i] = false;
+            //obsoleteWalkId[i] = false;
+            obsoleteWalkId.push_back(false);
         }
         
         
         /***MERGE START***/
         if(MODE_WALK_UNION || MODE_ABSORPTION_NOTIP || MODE_ABSORPTION_TIP){
             ofstream betterfile;
-            betterfile.open("stitchedUnitigs"+modefilename[ALGOMODE]+".fa");
+            betterfile.open("stitchedUnitigs"+modename[ALGOMODE]+".fa");
             
             ofstream betterfilePlain;
-            betterfilePlain.open("plainOutput"+modefilename[ALGOMODE]+".txt");
+            betterfilePlain.open("plainOutput"+modename[ALGOMODE]+".txt");
             
             
             for ( const auto& p: gmerge.fwdWalkId)
@@ -836,8 +863,9 @@ public:
             }
             betterfile.close();
         }
+        cout<<"[3.2] Union done. TIME: "<<readTimer()-time_a<<"sec.\n";
         
-        
+         cout<<"N. walk: "<<V_twoway_ustitch<<endl;
         
         //BRACKETCOMP encoder and printer::::
         //        if(0==0){
@@ -900,7 +928,7 @@ public:
          */
         
         
-        if(MODE_ABSORPTION_TIP){
+        if(MODE_ABSORPTION_TIP || BOTHTIPABSORB_V2){
             if(2==2){
                 for (auto const& x : sinkSrcEdges)
                 {
@@ -1006,20 +1034,35 @@ public:
             //            }
             
             for (int sinksrc = 0; sinksrc<V; sinksrc++) {
-                if(global_issinksource[sinksrc] == 1 && color[sinksrc] == 'w' ){
+                bool istipit = (oldToNew[sinksrc].isTip==1 || oldToNew[sinksrc].isTip==2);
+                if((global_issinksource[sinksrc] == 1 && color[sinksrc] == 'w') || (BOTHTIPABSORB_V2 && istipit)){
                     list<int> xxx;
                     xxx.push_back(sinksrc);
                     newToOld.push_back(xxx);
-                    oldToNew[sinksrc].serial = countNewNode++;
-                    oldToNew[sinksrc].finalWalkId = oldToNew[sinksrc].serial;
-                    oldToNew[sinksrc].pos_in_walk = 1;
-                    oldToNew[sinksrc].isTip = 0;
+                    
+                    if(istipit)  {
+                        
+                        oldToNew[sinksrc].serial = countNewNode++;
+                        obsoleteWalkId.push_back(false);
+                        oldToNew[sinksrc].finalWalkId = oldToNew[sinksrc].serial;
+                        oldToNew[sinksrc].pos_in_walk = 1;
+                    }else if(color[sinksrc] == 'r' || color[sinksrc] == 'l'  ){
+                        oldToNew[sinksrc].isTip = 0;
+                        
+                    }else{
+                        oldToNew[sinksrc].serial = countNewNode++;
+                        obsoleteWalkId.push_back(false);
+                        oldToNew[sinksrc].finalWalkId = oldToNew[sinksrc].serial;
+                        oldToNew[sinksrc].pos_in_walk = 1;
+                        oldToNew[sinksrc].isTip = 0;
+                    }
                     // error resolved in sept 14
                     color[sinksrc] = 'b';
                 }
             }
             
             
+            
             // make the absorb graph
             //BRACKETCOMP encoder and printer::::
             vector<MyTypes::fourtuple> sorter;
@@ -1028,26 +1071,66 @@ public:
                 sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
             }
             
+            
             stable_sort(sorter.begin(),sorter.end(),sort_by_tipstatus);
             stable_sort(sorter.begin(),sorter.end(),sort_by_pos);
             stable_sort(sorter.begin(),sorter.end(),sort_by_walkId);
             //sorter.push_back(make_tuple(0, 9999999999, 0, 0)); //dummy entry for making coding logic easier
             
+            
+            
+
+
             //START absorbGraph
             //if you are doing both end absorption, do it here: adding **
             // by adding entries to **
             // count the number of * divided by two... lets say, cnt=3, then for next cnt walks, cut k-1 prefix, and k-1 suffix, make changes in recursive absorption
+            
+            ofstream globalStatFile;
+            globalStatFile.open("global_stat", std::fstream::out | std::fstream::app);
+            double memvmKB,memrssKB;
+            process_mem_usage(memvmKB, memrssKB);
+            //cout<<"memory (virtual) to do ONLY UST DFS (KB)"<<memvmKB<<endl;
+            //cout<<"memory (rss) to do ONLY UST DFS (KB)"<<memrssKB<<endl;
+            globalStatFile << "MEM_VM_ONLY_UST_KB" <<  "=" << memvmKB<< endl;
+            globalStatFile << "MEM_RSS_ONLY_UST_KB" <<  "=" << memrssKB << endl;
+            
+            double time1 = readTimer();
             absorptionManager(sorter);
+            time1 = readTimer() - time1;
+            globalStatFile << "TIME_ABSORB_SEC" <<  "=" << time1 << endl;
+            globalStatFile.close();
             // end of absorb graph
         }
         
-        if(MODE_ABSORPTION_NOTIP){
+        if(MODE_ABSORPTION_NOTIP &&!BOTHTIPABSORB_V2 ){
+            if(BOTHTIPABSORB || BOTHTIPABSORB){
+               for (int sinksrc = 0; sinksrc<adjList.size(); sinksrc++) {
+                   //if(global_issinksource[sinksrc] == 1 && color[sinksrc] == 'w' ){
+                   if(global_issinksource[sinksrc] == 1 ){
+                       list<int> xxx;
+                       xxx.push_back(sinksrc);
+                       newToOld.push_back(xxx);
+                       oldToNew[sinksrc].serial = countNewNode++;
+                       oldToNew[sinksrc].finalWalkId = oldToNew[sinksrc].serial;
+                       oldToNew[sinksrc].pos_in_walk = 1;
+                       oldToNew[sinksrc].isTip = 0;
+                       // error resolved in sept 14
+                       color[sinksrc] = 'b';
+                   }
+               }
+           }
+            
+            
             // make the absorb graph
             //BRACKETCOMP encoder and printer::::
             vector<MyTypes::fourtuple> sorter;
             for(int uid = 0 ; uid< V; uid++){
-                new_node_info_t nd = oldToNew[uid];
-                sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
+                //if( global_issinksource[uid]==0 || !BOTHTIPABSORB ){
+                    new_node_info_t nd = oldToNew[uid];
+                                   sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
+                //}
+               
             }
             
             //stable_sort(sorter.begin(),sorter.end(),sort_by_tipstatus);
@@ -1055,11 +1138,72 @@ public:
             stable_sort(sorter.begin(),sorter.end(),sort_by_walkId);
             //sorter.push_back(make_tuple(0, 9999999999, 0, 0)); //dummy entry for making coding logic easier
             
+        //     for(auto i: sorter ){
+        //     cout<<"walk "<<get<1>(i)<<":";
+        //     cout<<"("<<get<2>(i)<<")";
+        //      cout<<get<0>(i)<<" ";
+        //     cout<<get<3>(i)<<"";
+        //     cout<<endl;
+        // }
+        // cout<<"\n\n";
+            bool TESTING_CONNECT=false;
+            if(TESTING_CONNECT){
+                int maxv = 32; 
+
+                cout<<"HERE I AM, absorb in unitig graph::: "<<maxv<<"\n";
+                    for(int x=0; x<sorter.size(); x++){
+                        int uid = get<0>(sorter[x]);
+                        int old_walk = get<1>(sorter[x]);
+                        int old_pos = get<2>(sorter[x]) - 1;
+                        int istip = get<3>(sorter[x]);
+
+                        if(old_pos/maxv > 0){
+                            //modify its walkid
+                             int new_walk;
+                             int new_pos = old_pos%maxv + 1;
+                             if(new_pos == 1){
+                                   new_walk = countNewNode++;
+                                   obsoleteWalkId.push_back(false);
+                             }else{
+                                 new_walk = countNewNode;
+                             }
+                              
+                             oldToNew[uid].finalWalkId = new_walk;
+                             oldToNew[uid].pos_in_walk = new_pos;
+                             sorter[x] = make_tuple(uid, new_walk, new_pos, istip);
+                        }   
+                    }
+              //      stable_sort(sorter.begin(),sorter.end(),sort_by_pos);
+            //stable_sort(sorter.begin(),sorter.end(),sort_by_walkId);
+            }
+        // for(auto i: sorter ){
+        //     cout<<"walk "<<get<1>(i)<<":";
+        //     cout<<"("<<get<2>(i)<<")";
+        //      cout<<get<0>(i)<<" ";
+        //     cout<<get<3>(i)<<"";
+        //     cout<<endl;
+        // }
             //START absorbGraph
             //if you are doing both end absorption, do it here: adding **
             // by adding entries to **
             // count the number of * divided by two... lets say, cnt=3, then for next cnt walks, cut k-1 prefix, and k-1 suffix, make changes in recursive absorption
+            
+            
+            ofstream globalStatFile;
+            globalStatFile.open("global_stat", std::fstream::out | std::fstream::app);
+            double memvmKB,memrssKB;
+            process_mem_usage(memvmKB, memrssKB);
+            //cout<<"memory (virtual) to do ONLY UST DFS (KB)"<<memvmKB<<endl;
+            //cout<<"memory (rss) to do ONLY UST DFS (KB)"<<memrssKB<<endl;
+            globalStatFile << "MEM_VM_ONLY_UST_KB" <<  "=" << memvmKB<< endl;
+            globalStatFile << "MEM_RSS_ONLY_UST_KB" <<  "=" << memrssKB << endl;
+
+            double time1 = readTimer();
             absorptionManager(sorter);
+            time1 = readTimer() - time1;
+            globalStatFile << "TIME_ABSORB_SEC" <<  "=" << time1 << endl;
+            globalStatFile.close();
+            
             // end of absorb graph
         }
         
@@ -1081,7 +1225,7 @@ public:
         delete [] sortStruct;
         delete [] countedForLowerBound;
         
-        delete [] obsoleteWalkId;
+        //delete [] obsoleteWalkId;
     }
 };
 
@@ -1107,11 +1251,11 @@ void printNewGraph(Graph &G){
 
 
 void formattedOutputForwardExt(Graph &G){
-    string plainOutput = "plainOutput"+modefilename[ALGOMODE]+".txt";
+    string plainOutput = "plainOutput"+modename[ALGOMODE]+".txt";
     ofstream plainfile;
     plainfile.open(plainOutput);
     
-    string stitchedUnitigs = "stitchedUnitigs"+modefilename[ALGOMODE]+".fa";
+    string stitchedUnitigs = "stitchedUnitigs"+modename[ALGOMODE]+".fa";
     ofstream myfile;
     myfile.open (stitchedUnitigs);
     //>0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:-
@@ -1134,29 +1278,26 @@ void formattedOutputForwardExt(Graph &G){
 
 
 int main(int argc, char** argv) {
+    setmemlimit();
+    //unsigned int SEED =unsigned ( std::time(0) );
+    unsigned int SEED =1;
+    std::srand (  SEED );
     //processEncodedFile();
     //return 0;
     
-    
     FILE * statFile;
-    statFile = fopen (("stats"+modefilename[ALGOMODE]+".txt").c_str(),"w");
+    statFile = fopen (("stats"+modename[ALGOMODE]+".txt").c_str(),"w");
     
     ofstream globalStatFile;
     globalStatFile.open("global_stat", std::fstream::out | std::fstream::app);
     //globalStatFile.open("global_stat", std::fstream::out);
-    
-    //    string debugFileName = "debug.txt";
-    //    ofstream debugFile;
-    //    debugFile.open(debugFileName);
-    
-    
+
     const char* nvalue = "" ;
-    
     int c ;
     
-    /*
+    ///*
     if(DEBUGMODE==false){
-        while( ( c = getopt (argc, argv, "i:k:m:d:f:p:") ) != -1 )
+        while( ( c = getopt (argc, argv, "i:k:m:d:f:p:s:") ) != -1 )
         {
             switch(c)
             {
@@ -1171,6 +1312,11 @@ int main(int argc, char** argv) {
                 case 'm':
                     if(optarg) {
                         ALGOMODE = static_cast<ALGOMODE_T>(std::atoi(optarg));
+                    }
+                    break;
+                case 's':
+                    if(optarg) {
+                        SEED = static_cast<unsigned int>(std::atoi(optarg));
                     }
                     break;
                 case 'd':
@@ -1209,17 +1355,11 @@ int main(int argc, char** argv) {
                     argv[0]);
             exit(EXIT_FAILURE);
         }
-        
-        
-        
+
         UNITIG_FILE = string(nvalue);
     }
-    */
+    //*/
     
-    MODE_WALK_UNION = (ALGOMODE == TWOWAYEXT);
-    MODE_ABSORPTION_TIP = (ALGOMODE == BRACKETCOMP);
-    MODE_ABSORPTION_NOTIP = (ALGOMODE == ONEWAYABSORPTION || ALGOMODE == ONEWAYABSORPTION_UNTESTED);
-
     
     
     ifstream infile(UNITIG_FILE);
@@ -1227,254 +1367,391 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error: File named \"%s\" cannot be opened.\n", UNITIG_FILE.c_str());
         exit(EXIT_FAILURE);
     }
-    
-    
-    
+
     double startTime = readTimer();
-    cout << "## START reading file: " << UNITIG_FILE << ": K = "<<K<<endl;
+    cout << "## [1] Reading file... " << UNITIG_FILE << ": K = "<<K<<endl;
     if (EXIT_FAILURE == read_unitig_file(UNITIG_FILE, unitigs)) {
         return EXIT_FAILURE;
     }
     infile.close();
     double TIME_READ_SEC = readTimer() - startTime;
-    cout<<"TIME to read file "<<TIME_READ_SEC<<" sec."<<endl;
+    cout<<"[COMPLETE][1] TIME to read file "<<TIME_READ_SEC<<" sec.\n\n";
     
-    
-    Graph G;
-    
-    //count total number of edges
-    int E_bcalm = 0;
-    for (int i = 0; i < G.V; i++) {
-        E_bcalm += adjList[i].size();
-    }
-    int V_bcalm = G.V;
-    int numKmers = 0;
-    int C_bcalm = 0;
-    
-    for (unitig_struct_t unitig : unitigs) {
-        C_bcalm += unitig.ln;
-        numKmers +=  unitig.ln - K + 1;
-    }
-    
-    cout<<"## START gathering info about upper bound. "<<endl;
-    double time_a = readTimer();
-    G.indegreePopulate();
-    
-    cout<<"TIME for information gather: "<<readTimer() - time_a<<" sec."<<endl;
-
-    
-    
-    
-    if(ALGOMODE == GRAPHPRINT){
-        char sss[1000];
-        cout<<"input the nodes to include in printing separated by space (i.e. 20 19 18): "<<endl;
-        while(true){
-            //string ipstr = "20 19 18";
-            gets(sss);
-            string ipstr(sss);
-            if(ipstr=="stop"){
-                break;
-            }
-            makeGraphDot(ipstr);
-            cout<<"done print, say again:"<<endl;
-        }
-    }
-    
-    
-    int walkstarting_node_count = ceil((sharedparent_count + sink_count + source_count)/2.0) + isolated_node_count;
-    int charLowerbound = C_bcalm-(K-1)*(G.V - walkstarting_node_count*1.0);
-    float upperbound = (1-((C_bcalm-(K-1)*(G.V - walkstarting_node_count*1.0))/C_bcalm))*100.0;
-
-    printf( "%d\t\
-           %d\t\
-           %d\t\
-           %d\t\
-           %d\t\
-           %d\t\
-           %.2f\t\
-           %.2f%%\t\
-           %d\t\
-           %d\t\
-           %d\t\
-           %d\t\
-           %.2f%%\t",
-           K,
-           numKmers,
-           V_bcalm,
-           E_bcalm,
-           C_bcalm,
-           charLowerbound,
-           (charLowerbound*2.0)/numKmers,
-           upperbound,
-           isolated_node_count,
-           sink_count,
-           source_count,
-           sharedparent_count,
-           sharedparent_count*100.0/V_bcalm
-           );
-    
-    
-
-    globalStatFile << "K" <<  "=" << K << endl;
-    globalStatFile << "N_KMER" <<  "=" << numKmers << endl;
-    globalStatFile << "V_BCALM" <<  "=" << V_bcalm << endl;
-    globalStatFile << "E_BCALM" <<  "=" << E_bcalm << endl;
-    globalStatFile << "C_BCALM" <<  "=" << C_bcalm << endl;
-    globalStatFile << "C_LB" <<  "=" << charLowerbound << endl;
-    globalStatFile << "V_LB" <<  "=" << walkstarting_node_count << endl;
-    globalStatFile << "N_ISOLATED" <<  "=" << isolated_node_count << endl;
-    globalStatFile << "N_SINK" <<  "=" << sink_count << endl;
-    globalStatFile << "N_SOURCE" <<  "=" << source_count << endl;
-    globalStatFile << "N_SPECIAL" <<  "=" << sharedparent_count << endl;
-    
-    //OPTIONAL;DERIVABLE
-    globalStatFile << "BITSKMER_LB" <<  "=" << (charLowerbound*2.0)/numKmers << endl;
-    globalStatFile << "PERCENT_UB" <<  "=" << upperbound <<  "%" << endl;
-    globalStatFile << "PERCENT_N_SPECIAL" <<  "=" << sharedparent_count*100.0/V_bcalm <<"%" << endl;
-    
-
-    for (auto i = inOutCombo.begin(); i != inOutCombo.end(); i++) {
-        printf("%.2f%%\t", (i->second)*100.0/V_bcalm);
-        globalStatFile << "PERCENT_DEGREE_"<<(i->first).first << "_" << (i->first).second <<  "=" << (i->second)*100.0/V_bcalm <<"%" << endl;
-    }
-    printf("%.2f%%\t\
-           %.2f%%\t",
-           isolated_node_count*100.0/V_bcalm,
-           (sink_count+source_count)*100.0/V_bcalm);
-    //OPTIONAL; derivable
-    globalStatFile << "PERCENT_N_ISOLATED" <<  "=" << isolated_node_count*100.0/V_bcalm <<"%" << endl;
-    globalStatFile << "PERCENT_N_DEADEND" <<  "=" << (sink_count+source_count)*100.0/V_bcalm <<"%" << endl;
-
-    // Iterating the map and printing ordered values
-    //    for (auto i = inOutCombo.begin(); i != inOutCombo.end(); i++) {
-    //        cout << "(" << i->first.first<< ", "<< i->first.second << ")" << " := " << i->second << '\n';
-    //    }
-    if(ALGOMODE == PROFILE_ONLY){
+    {
         
+        Graph G;
+        
+        //count total number of edges
+        int E_bcalm = 0;
+        for (int i = 0; i < G.V; i++) {
+            E_bcalm += adjList[i].size();
+        }
+        int V_bcalm = G.V;
+        int numKmers = 0;
+        int C_bcalm = 0;
+        
+        for (unitig_struct_t unitig : unitigs) {
+            C_bcalm += unitig.ln;
+            numKmers +=  unitig.ln - K + 1;
+        }
+        
+        double memvmKB, memrssKB;
+        process_mem_usage(memvmKB, memrssKB);
+        //cout<<"memory (virtual) to load bcalm file (KB)"<<memvmKB<<endl;
+        //cout<<"memory (rss) to load bcalm file (KB)"<<memrssKB<<endl;
+        globalStatFile << "MEM_VM_LOAD_KB" <<  "=" << memvmKB<< endl;
+        globalStatFile << "MEM_RSS_LOAD_KB" <<  "=" << memrssKB << endl;
+        
+        
+        cout<<"## [2] Gathering info about upper bound... \n";
+        double time_a = readTimer();
+        G.indegreePopulate();
+        
+        cout<<"[COMPLETE][2] TIME for information gather: "<<readTimer() - time_a<<" sec.\n\n";
+        
+        
+        
+        
+        if(ALGOMODE == GRAPHPRINT){
+            char sss[1000];
+            cout<<"input the nodes to include in printing separated by space (i.e. 20 19 18): "<<endl;
+            while(true){
+                //string ipstr = "20 19 18";
+                gets(sss);
+                string ipstr(sss);
+                if(ipstr=="stop"){
+                    break;
+                }
+                makeGraphDot(ipstr);
+                cout<<"done print, say again:"<<endl;
+            }
+        }
+        
+        
+        int walkstarting_node_count = ceil((sharedparent_count + sink_count + source_count)/2.0) + isolated_node_count;
+        int charLowerbound = C_bcalm-(K-1)*(G.V - walkstarting_node_count*1.0);
+        float upperbound = (1-((C_bcalm-(K-1)*(G.V - walkstarting_node_count*1.0))/C_bcalm))*100.0;
+        
+        printf( "%d\t\
+               %d\t\
+               %d\t\
+               %d\t\
+               %d\t\
+               %d\t\
+               %.2f\t\
+               %.2f%%\t\
+               %d\t\
+               %d\t\
+               %d\t\
+               %d\t\
+               %.2f%%\t",
+               K,
+               numKmers,
+               V_bcalm,
+               E_bcalm,
+               C_bcalm,
+               charLowerbound,
+               (charLowerbound*2.0)/numKmers,
+               upperbound,
+               isolated_node_count,
+               sink_count,
+               source_count,
+               sharedparent_count,
+               sharedparent_count*100.0/V_bcalm
+               );
+        
+        
+        globalStatFile << "SEED" <<  "=" << SEED << endl;
+        
+        globalStatFile << "K" <<  "=" << K << endl;
+        globalStatFile << "N_KMER" <<  "=" << numKmers << endl;
+        globalStatFile << "V_BCALM" <<  "=" << V_bcalm << endl;
+        globalStatFile << "E_BCALM" <<  "=" << E_bcalm << endl;
+        globalStatFile << "C_BCALM" <<  "=" << C_bcalm << endl;
+        globalStatFile << "C_LB" <<  "=" << charLowerbound << endl;
+        globalStatFile << "V_LB" <<  "=" << walkstarting_node_count << endl;
+        globalStatFile << "N_ISOLATED" <<  "=" << isolated_node_count << endl;
+        globalStatFile << "N_SINK" <<  "=" << sink_count << endl;
+        globalStatFile << "N_SOURCE" <<  "=" << source_count << endl;
+        globalStatFile << "N_SPECIAL" <<  "=" << sharedparent_count << endl;
+        
+        //OPTIONAL;DERIVABLE
+        globalStatFile << "BITSKMER_LB" <<  "=" << (charLowerbound*2.0)/numKmers << endl;
+        globalStatFile << "PERCENT_UB" <<  "=" << upperbound <<  "%" << endl;
+        globalStatFile << "PERCENT_N_SPECIAL" <<  "=" << sharedparent_count*100.0/V_bcalm <<"%" << endl;
+        
+        
+        for (auto i = inOutCombo.begin(); i != inOutCombo.end(); i++) {
+            printf("%.2f%%\t", (i->second)*100.0/V_bcalm);
+            globalStatFile << "PERCENT_DEGREE_"<<(i->first).first << "_" << (i->first).second <<  "=" << (i->second)*100.0/V_bcalm <<"%" << endl;
+        }
+        printf("%.2f%%\t\
+               %.2f%%\t",
+               isolated_node_count*100.0/V_bcalm,
+               (sink_count+source_count)*100.0/V_bcalm);
+        //OPTIONAL; derivable
+        globalStatFile << "PERCENT_N_ISOLATED" <<  "=" << isolated_node_count*100.0/V_bcalm <<"%" << endl;
+        globalStatFile << "PERCENT_N_DEADEND" <<  "=" << (sink_count+source_count)*100.0/V_bcalm <<"%" << endl;
+        
+        // Iterating the map and printing ordered values
+        //    for (auto i = inOutCombo.begin(); i != inOutCombo.end(); i++) {
+        //        cout << "(" << i->first.first<< ", "<< i->first.second << ")" << " := " << i->second << '\n';
+        //    }
+        
+        if(!NAIVEVARI)
+            globalStatFile << "NUM_CC_UNITIG_GRAPH" <<  "=" << pullOutConnectedComponent() << endl;
+        if(ALGOMODE == PROFILE_ONLY){
+            globalStatFile.close();
+            printf("\n");
+            return 0;
+        }
+        
+        MODE_WALK_UNION = (ALGOMODE == TWOWAYEXT);
+        MODE_ABSORPTION_TIP = (ALGOMODE == BRACKETCOMP);
+        MODE_ABSORPTION_NOTIP = (ALGOMODE == ONEWAYABSORPTION || ALGOMODE == ONEWAYABSORPTION_UNTESTED || ALGOMODE == PROFILE_ONLY_ABS);
+
+        if (MODE_ABSORPTION_TIP){
+            ofileTipOutput ="onlytipOutput.txt";
+        }
+        if(ALGOMODE == TIPANDAB){
+            MODE_ABSORPTION_NOTIP = true;
+            MODE_ABSORPTION_TIP = false;
+            BOTHTIPABSORB_V2 = true;
+        }
+        if (ALGOMODE == TIPANDAB_TIPLATER)
+        {
+            MODE_ABSORPTION_NOTIP = true;
+            MODE_ABSORPTION_TIP = false;
+            BOTHTIPABSORB_V2 = true;
+        }
+        if(ALGOMODE == PROFILE_ONLY_ABS){
+             MODE_ABSORPTION_NOTIP = true;
+            MODE_ABSORPTION_TIP = false;
+            BOTHTIPABSORB_V2 = false;
+        }
+
+        //pullOutConnectedComponent();
+        //exit(1);
+        
+        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@//
+        //##################################################//
+        //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@//
+        //##################################################//
+        
+        
+        
+        printf("\n\n Running in mode: %s\t \n\n",  modename[ALGOMODE].c_str());
+        
+        
+        //STARTING DFS
+        cout<<"## [3] Running UST algorithm... "<<endl;
+        G.DFS();
+        
+        process_mem_usage(memvmKB, memrssKB);
+        //cout<<"memory (virtual) to do initial DFS (KB)"<<memvmKB<<endl;
+        //cout<<"memory (rss) to do initial DFS (KB)"<<memrssKB<<endl;
+        globalStatFile << "MEM_VM_DFS_KB" <<  "=" << memvmKB<< endl;
+        globalStatFile << "MEM_RSS_DFS_KB" <<  "=" << memrssKB << endl;
+        
+        if(DBGFLAG == PRINTER){
+            //printBCALMGraph(adjList);
+            printNewGraph(G);
+            for(int i = 0; i< countNewNode; i++){
+                cout<<"new ->" <<i<<" ";
+                for(int x: newToOld[i]){
+                    cout<<nodeSign[x]<<"."<<x<<" ";
+                }
+                cout<<endl;
+            }
+        }
+        
+        
+        
+        double TIME_TOTAL_SEC = readTimer() - startTime;
+        
+        time_a = readTimer();
+        
+        if(ALGOMODE==BRACKETCOMP){
+            C_ustitch = C_tip_ustitch;
+            V_ustitch  = V_tip_ustitch;
+        }else if(ALGOMODE == TWOWAYEXT){
+            V_ustitch = V_twoway_ustitch;
+            C_ustitch = C_twoway_ustitch;
+        }else if(ALGOMODE == BASIC){
+            formattedOutputForwardExt(G);
+            V_ustitch = countNewNode;
+        }else if(ALGOMODE == ONEWAYABSORPTION || ALGOMODE == TIPANDAB_TIPLATER || ALGOMODE == TIPANDAB){
+            C_ustitch = C_oneabsorb;
+            V_ustitch  = V_oneabsorb;
+        }else{
+            formattedOutputForwardExt(G);
+            V_ustitch = countNewNode;
+        }
+        
+        //
+        //if vari new mode
+        if(NAIVEVARI){
+            V_oneabsorb = absorbGraphNumCC_endAbosrb;
+            V_ustitch =absorbGraphNumCC_endAbosrb;
+            int csp = (V_twoway_ustitch-V_oneabsorb)*4;
+            C_oneabsorb = C_twoway_ustitch + C_abs_calc;
+            C_ustitch = C_oneabsorb;
+             cout<<"c_ust="<<C_twoway_ustitch<<endl;
+            cout<<"c_abs_calc="<<C_ustitch<<endl;
+            cout<<"c_special_calc="<<csp<<endl;
+            cout<<"v_ust="<<V_twoway_ustitch<<endl;
+            cout<<"v_abs="<<V_ustitch<<endl;
+            cout<<"n_abs="<<(V_twoway_ustitch-V_oneabsorb)<<endl;
+             cout<<"c_per_imp="<<(1.0-(C_ustitch*1.0)/(C_twoway_ustitch*1.0))*100<<"%"<<endl;
+            int ncc=pullOutConnectedComponent();
+            globalStatFile << "NUM_CC_UNITIG_GRAPH" <<  "=" <<  ncc<< endl;
+            cout << "n_CC_UNITIG_GRAPH" <<  "=" << ncc << endl;
+            
+            C_oneabsorb_ACGT = C_ustitch - csp;
+            C_oneabsorb_plusminus = C_ustitch - csp/4;
+            C_oneabsorb_brackets = C_ustitch - csp/2;
+        }else{
+            int csp = (V_twoway_ustitch-V_oneabsorb)*3;
+             cout<<"c_ust="<<C_twoway_ustitch<<endl;
+            cout<<"c_abs="<<C_oneabsorb<<endl;
+            cout<<"c_special_calc="<<csp<<endl;
+            cout<<"v_ust="<<V_twoway_ustitch<<endl;
+            cout<<"v_abs="<<V_oneabsorb<<endl;
+            cout<<"n_abs="<<(V_twoway_ustitch-V_oneabsorb)<<endl;
+            cout<<"c_per_imp="<<(1.0-(C_ustitch*1.0)/(C_twoway_ustitch*1.0))*100<<"%"<<endl;
+        }
+        
+        
+        
+        cout<<"[3.5] TIME to output: "<<readTimer() - time_a<<" sec. \n\n";
+        cout<<"[COMPLETE][3] Total TIME: "<<TIME_TOTAL_SEC<<" sec. \n\n";
+        
+        
+        float percent_saved_c = (1-(C_ustitch*1.0/C_bcalm))*100.0;
+        float ustitchBitsPerKmer;
+        if(MODE_ABSORPTION_NOTIP || MODE_ABSORPTION_TIP){
+            ustitchBitsPerKmer =C_ustitch*2.0/numKmers;
+        }else{
+            ustitchBitsPerKmer =C_ustitch*2.0/numKmers;
+        }
+        
+        
+        printf("%s\t",  modename[ALGOMODE].c_str());
+        printf("%d\t\
+               %.2f%%\t\
+               %.2f%%\t\
+               %d\t\
+               %.2f\t",
+               V_ustitch,
+               percent_saved_c,
+               upperbound - percent_saved_c,
+               C_ustitch,
+               ustitchBitsPerKmer
+               );
+        printf("%.2f\t\
+               %.2f\t",
+               TIME_READ_SEC,
+               TIME_TOTAL_SEC
+               );
         printf("\n");
-        return 0;
-    }
-    
-    //pullOutConnectedComponent();
-    //exit(1);
-    
-    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@//
-    //##################################################//
-    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@//
-    //##################################################//
-    
-    
-    
-    printf("\n\n Running in mode: %s\t \n\n",  modefilename[ALGOMODE].c_str());
-    
-    
-    //STARTING DFS
-    cout<<"## START DFS: "<<endl;
-    G.DFS();
-    
-    
-    
-    if(DBGFLAG == PRINTER){
-        //printBCALMGraph(adjList);
-        printNewGraph(G);
-        for(int i = 0; i< countNewNode; i++){
-            cout<<"new ->" <<i<<" ";
-            for(int x: newToOld[i]){
-                cout<<nodeSign[x]<<"."<<x<<" ";
-            }
-            cout<<endl;
+        printf("\n");
+        
+        globalStatFile << "TIME_TOTAL_ENCODE_SEC" <<  "=" << TIME_TOTAL_SEC << endl;
+        
+        //globalStatFile << "USTITCH_MODE" <<  "=" << mapmode[ALGOMODE].c_str() << endl;
+        globalStatFile << "V_USTITCH" << mapmode[ALGOMODE].c_str() <<  "=" << V_ustitch << endl;
+        globalStatFile << "PERCENT_C_SAVED" << mapmode[ALGOMODE].c_str() <<  "=" << percent_saved_c << "%" << endl;
+        globalStatFile << "PERCENT_C_GAP_WITH_UB" << mapmode[ALGOMODE].c_str() <<  "=" << upperbound - percent_saved_c << "%" << endl;
+        globalStatFile << "C_USTITCH" << mapmode[ALGOMODE].c_str() <<   "=" <<C_ustitch << endl;
+        globalStatFile << "BITSKMER_USTITCH" << mapmode[ALGOMODE].c_str() <<  "=" <<ustitchBitsPerKmer << endl;
+        globalStatFile << "TIME_READINPUT_SEC" << mapmode[ALGOMODE].c_str() <<  "=" <<TIME_READ_SEC << endl;
+        globalStatFile << "TIME_ENCODE_TOTAL_SEC" << mapmode[ALGOMODE].c_str() <<  "=" <<TIME_TOTAL_SEC << endl;
+        
+        
+        if(ALGOMODE == ONEWAYABSORPTION || BOTHTIPABSORB_V2){
+            globalStatFile << "C_ONEABSORB_ACGT" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_ACGT << endl;
+            globalStatFile << "C_ONEABSORB_PLUSMINUS" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_plusminus << endl;
+            
+            globalStatFile << "C_ONEABSORB_BRACKETS" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_brackets << endl;
+            
+            globalStatFile << "ABSORB_GRAPH_NUM_CC" <<  "=" <<absorbGraphNumCC_endAbosrb << endl;
+            connectedCC_allAbsorb();
+            globalStatFile << "ABSORB_GRAPH_NUM_CC_ALL_ABSORB" <<  "=" <<absorbGraphNumCC_allAbosrb << endl;
         }
-    }
-    
-    
-    double TIME_TOTAL_SEC = readTimer() - startTime;
-    
-    time_a = readTimer();
-    
-    if(ALGOMODE==BRACKETCOMP){
-        C_ustitch = C_tip_ustitch;
-        V_ustitch  = V_tip_ustitch;
-    }else if(ALGOMODE == TWOWAYEXT){
-        V_ustitch = V_twoway_ustitch;
-        C_ustitch = C_twoway_ustitch;
-    }else if(ALGOMODE == BASIC){
-        formattedOutputForwardExt(G);
-        V_ustitch = countNewNode;
-    }else if(ALGOMODE == ONEWAYABSORPTION){
-        C_ustitch = C_oneabsorb;
-        V_ustitch  = V_oneabsorb;
-    }else{
-        formattedOutputForwardExt(G);
-        V_ustitch = countNewNode;
-    }
-    
-    
-    cout<<"TIME to output: "<<readTimer() - time_a<<" sec."<<endl;
-    
-    
-    float percent_saved_c = (1-(C_ustitch*1.0/C_bcalm))*100.0;
-    float ustitchBitsPerKmer;
-    if(MODE_ABSORPTION_NOTIP || MODE_ABSORPTION_TIP){
-        ustitchBitsPerKmer =C_ustitch*2.0/numKmers;
-    }else{
-        ustitchBitsPerKmer =C_ustitch*2.0/numKmers;
-    }
-    
-    
-    printf("%s\t",  mapmode[ALGOMODE].c_str());
-    printf("%d\t\
-           %.2f%%\t\
-           %.2f%%\t\
-           %d\t\
-           %.2f\t",
-           V_ustitch,
-           percent_saved_c,
-           upperbound - percent_saved_c,
-           C_ustitch,
-           ustitchBitsPerKmer
-           );
-    printf("%.2f\t\
-           %.2f\t",
-           TIME_READ_SEC,
-           TIME_TOTAL_SEC
-           );
-    printf("\n");
-    printf("\n");
-    
-    //globalStatFile << "USTITCH_MODE" <<  "=" << mapmode[ALGOMODE].c_str() << endl;
-    globalStatFile << "V_USTITCH_" << mapmode[ALGOMODE].c_str() <<  "=" << V_ustitch << endl;
-    globalStatFile << "PERCENT_C_SAVED_" << mapmode[ALGOMODE].c_str() <<  "=" << percent_saved_c << "%" << endl;
-    globalStatFile << "PERCENT_C_GAP_WITH_UB_" << mapmode[ALGOMODE].c_str() <<  "=" << upperbound - percent_saved_c << "%" << endl;
-    globalStatFile << "C_USTITCH_" << mapmode[ALGOMODE].c_str() <<   "=" <<C_ustitch << endl;
-    globalStatFile << "BITSKMER_USTITCH_" << mapmode[ALGOMODE].c_str() <<  "=" <<ustitchBitsPerKmer << endl;
-    globalStatFile << "TIME_READINPUT_SEC_" << mapmode[ALGOMODE].c_str() <<  "=" <<TIME_READ_SEC << endl;
-    globalStatFile << "TIME_TOTAL_SEC_" << mapmode[ALGOMODE].c_str() <<  "=" <<TIME_TOTAL_SEC << endl;
-    
-    
-    if(ALGOMODE == ONEWAYABSORPTION){
-        globalStatFile << "C_ONEABSORB_ACGT_" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_ACGT << endl;
-        globalStatFile << "C_ONEABSORB_PLUSMINUS_" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_plusminus << endl;
         
-        globalStatFile << "C_ONEABSORB_BRACKETS_" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_brackets << endl;
+        globalStatFile.close();
+        fclose(statFile);
         
-        globalStatFile << "ABSORB_GRAPH_NUM_CC" <<  "=" <<absorbGraphNumCC_endAbosrb << endl;
-        connectedCC_allAbsorb();
-        globalStatFile << "ABSORB_GRAPH_NUM_CC_ALL_ABSORB" <<  "=" <<absorbGraphNumCC_allAbosrb << endl;
+        process_mem_usage(memvmKB, memrssKB);
+        cout<<"before clearing memory (virtual) to do ONLY UST DFS (KB)"<<memvmKB<<endl;
+        cout<<"before memory (rss) to do ONLY UST DFS (KB)"<<memrssKB<<endl;
+        
+        
+        if(VARIMODE){
+            ofstream boolfile("vari_isabsorbed.txt");
+            for(int i = 0; i<G.V; i++){
+                boolfile<<int(oldToNew[i].pos_in_walk!=1)<<endl;
+            }
+            boolfile.close();
+        }
+        
     }
     
     
+    unitigs.clear();
+    unitigs.shrink_to_fit();
     
-    globalStatFile.close();
-    fclose(statFile);
+
+    inOutCombo.clear();
+      
+    //adjList.clear();
+    //adjList.shrink_to_fit();
     
+    reverseAdjList.clear();
+    reverseAdjList.shrink_to_fit();
+    
+    newSequences.clear();
+     
+    newNewSequences.clear(); //int is the unitig id (old id)
+    
+    newNewMarker.clear();
+    
+
+    newToOld.clear();
+    newToOld.shrink_to_fit();
+    
+    walkFirstNode.clear(); //given a walk id, what's the first node of that walk
+    walkFirstNode.shrink_to_fit();
+    
+    sinkSrcEdges.clear(); //int is the unitig id (old id)
+    
+   
+    double memvmKB, memrssKB;
+    process_mem_usage(memvmKB, memrssKB);
+    //cout<<"CLEARED memory (virtual) to do ONLY UST DFS (KB)"<<memvmKB<<endl;
+    //cout<<"CLEARED memory (rss) to do ONLY UST DFS (KB)"<<memrssKB<<endl;
+    //globalStatFile << "MEM_VM_ONLY_UST_KB" <<  "=" << memvmKB<< endl;
+    //globalStatFile << "MEM_RSS_ONLY_UST_KB" <<  "=" << memrssKB << endl;
+    
+    cout<<"## [4] Decoding...\n";
+    double decodetime = readTimer();
     if(MODE_ABSORPTION_TIP){
-        //decodeTip(K, "/Users/Sherlock/Library/Developer/Xcode/DerivedData/bcl-awuuvnjbkkmukneqtvxvqashsbtu/Build/Products/Debug/tipOutput.txt");
-        decodeTip(K,"tipOutput.txt");
+        decodeTip(K,ofileTipOutput);
     }
     if(MODE_ABSORPTION_NOTIP){
-        decodeOneAbsorb(K,"tipOutput.txt");
+        if(!NAIVEVARI)
+            decodeOneAbsorb(K,ofileTipOutput);
     }
+    globalStatFile.open("global_stat", std::fstream::out | std::fstream::app);
+    decodetime = readTimer() - decodetime;
+    globalStatFile << "TIME_DECODE_SEC" <<  "=" <<decodetime << endl;
+    globalStatFile << "METHOD" <<  "=" << ALGOMODE << endl;
     
     
+    cout<<"[COMPLETE][4] Decoding done. TIME: "<<decodetime<<"sec. \n";
+    globalStatFile.close();
+
+    
+   
     return EXIT_SUCCESS;
 }

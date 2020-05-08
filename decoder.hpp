@@ -199,6 +199,11 @@ void decodeOneAbsorb(int K=31, string ENCODED_FILE= "tipOutput.txt", string OUT_
     encodedFile.close();
     
     int i =0;
+    
+    //double memvmKB,memrssKB;
+    //process_mem_usage(memvmKB, memrssKB);
+    //   cout<<"inside decoder memory (virtual) to do ONLY UST DFS (KB)"<<memvmKB<<endl;
+    //   cout<<"inside decoder  memory (rss) to do ONLY UST DFS (KB)"<<memrssKB<<endl;
     for(string s: collectedStrings){
         outFile<<">"<<nWalkNo[i++]<<"\n"<<s<<endl;
         //cout<<s<<endl;
