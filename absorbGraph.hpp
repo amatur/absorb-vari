@@ -7,6 +7,9 @@
 #include "global.hpp"
 #include <algorithm>
 
+#include <sstream>
+
+
 class SCCGraph
 {
 public:
@@ -50,12 +53,14 @@ public:
     map<int, stack<edge_t> > absorbGraphCycleRemoved;
     
     
+    bool EARLYABSORB = true;
+    
     SCCGraph* g;
     bool* absorbed;
     char* absorbedCategory;
     
     queue<int> orderOfUnitigs;
-    
+    queue<int> reservedStringSize;
     
     queue<int> printSCCs();
     
@@ -74,7 +79,7 @@ public:
     vector<int> getAllUidsInWalk(int walkId);
     
     void lowerboundcc();
-    void earlyAbsorb(const vector<int>& );
+    void earlyAbsorb(const vector<int>&, bool*);
     void sorterIndexAndAbsorbGraphMaker();    //make the absorb graph with cycle, populates sorterIndexMap AND absorbGraph
     
     void absorbGraphIsCyclicUtil(int uid, vector<char>& visited, int depth);
@@ -83,10 +88,10 @@ public:
     
     bool* isItAPrintedWalk;
     void recursiveWalkStringMaker(int startWalkIndex, int depth, int Kpass);
-    void iterWalkStringMaker(int startWalkIndex2, int depth, int Kpass, vector<char>& color);
-    void iterWalkStringMakerCopy(int startWalkIndex2, int depth, int Kpass, vector<char>& color);
-    void recursivePrinter(int& startWalkIndex, int depth, int Kpass);
-    string recursiveWalkStringMakerOld(int startWalkIndex, int depth, int Kpass);
+    void iterSpellSlowDisk(int startWalkIndex2, int depth, int Kpass, vector<char>& color);
+    void iterSpellTested(int startWalkIndex2, int depth, int Kpass, vector<char>& color, int);
+    void tipSpell();
+    void recursiveWalkStringMakerOld(int startWalkIndex, int depth, int Kpass, ofstream &);
 
     
     void tipAbsorbedOutputter();
@@ -100,7 +105,7 @@ public:
         ccAdjList = new vector<int>[countNewNode];
         g = new SCCGraph(countNewNode);
         absorbedCategory = new char[adjList.size()];
-        absorbed = new bool[adjList.size()];
+        absorbed = new bool[countNewNode];
         isItAPrintedWalk = new bool[countNewNode];
         constructedStrings = new string[countNewNode];
         
@@ -114,6 +119,7 @@ public:
         for(int i=0; i<countNewNode; i++){
             isItAPrintedWalk[i]=false;
             constructedStrings[i] = "";
+            absorbed[i] = false;
         }
         if(NAIVEVARI){
             for(int i=0; i<  adjList.size(); i++){
@@ -214,13 +220,16 @@ void AbsorbGraph::lowerboundcc(){
     delete [] ccVisited;
 }
 
-void AbsorbGraph::earlyAbsorb(const vector<int>& earliestAbsorberPos){
+
+
+
+void AbsorbGraph::earlyAbsorb(const vector<int>& earliestAbsorberPos,bool* isAnAbsorbedWalk){
     for(int wid=0; wid<countNewNode; wid++){
         //
-        if(!absorbed[wid] && !obsoleteWalkId[wid]){
+        if(!isAnAbsorbedWalk[wid] && !obsoleteWalkId[wid]){
             //earliestAbsorberPos[wid];
             int it = sorterIndexMap[wid];
-            for(int x = it; x<sorter.size(); x++){
+            for(int x = it+1; x<sorter.size(); x++){
                 int walkId = get<1>(sorter[x]);
                 int pos = get<2>(sorter[x]);
                 int uid=get<0>(sorter[x]);
@@ -232,7 +241,7 @@ void AbsorbGraph::earlyAbsorb(const vector<int>& earliestAbsorberPos){
                     int absorber_uid = e.toNode;
                     int absorberWalk = oldToNew[absorber_uid].finalWalkId;
                     int absorber_pos = oldToNew[absorber_uid].pos_in_walk;
-                    if(!(absorber_pos<earliestAbsorberPos[absorberWalk])){
+                    if(!(absorber_pos<earliestAbsorberPos[absorberWalk]) && !isItWalkStarting(absorber_uid)){
                         //add it
                         if(absorberWalk != wid  ){
                             edge_t enew;
@@ -250,7 +259,7 @@ void AbsorbGraph::earlyAbsorb(const vector<int>& earliestAbsorberPos){
                             //                            bool is2 =(enew.left == nodeSign[e.toNode] && enew.right != nodeSign[enew.toNode] );
                             
                             absorbGraph[e.toNode].push_back(enew);
-                            absorbed[wid]=true;
+                            isAnAbsorbedWalk[wid]=true;
                             g->addEdge(absorberWalk, wid);
                             if(GETLOWERBOUND_CC){
                                 ccAdjList[absorberWalk].push_back(wid);
@@ -711,7 +720,7 @@ void AbsorbGraph::sorterIndexAndAbsorbGraphMaker(){
                 int prev_uid = get<0>(sorter[tup_i - 1]);
                 int prev_wid = get<1>(sorter[tup_i - 1]);
                 int prev_pos = get<2>(sorter[tup_i - 1]);
-                earliestAbsorberPos[prev_wid] =2;
+                //earliestAbsorberPos[prev_wid] =2;
                 //                if(prev_pos/2>1){
                 //                    earliestAbsorberPos[prev_wid] =prev_pos/2;
                 //                }else{
@@ -764,17 +773,22 @@ void AbsorbGraph::sorterIndexAndAbsorbGraphMaker(){
                     bool is4 =(enew.left != nodeSign[e.toNode] && enew.right == nodeSign[enew.toNode] );
                     bool is3 =(enew.left != nodeSign[e.toNode] && enew.right != nodeSign[enew.toNode] );
                     bool is2 =(enew.left == nodeSign[e.toNode] && enew.right != nodeSign[enew.toNode] );
-                    
-                    if(!isItWalkStarting(e.toNode) || is1 || is2) {
+                    // || is1 || is2  || (unitigs.at(e.toNode).sequence.length() >= 2*(K-1))
+                    if(!isItWalkStarting(e.toNode) || is1 || is2  || (unitigs.at(e.toNode).sequence.length() >= 2*(K-1))) {
+                        //|| (unitigs.at(e.toNode).sequence.length() >= 2*(K-1))
                         //  or (is1 && unitigs.at(uid).sequence.length() > 2*(K-1)) or (is2 && unitigs.at(uid).sequence.length() > 2*(K-1))
                         //|| is1 || is2
                          if( is1 || is2 || is3 || is4){
                         //if( ((is1 or is4) or (!ABSORBONLYTWO)) ){
                             absorbGraph[e.toNode].push_back(enew);
-                            if(oldToNew[e.toNode].pos_in_walk < earliestAbsorberPos[absorberWalk]){
-                                earliestAbsorberPos[absorberWalk] =oldToNew[e.toNode].pos_in_walk ;
-                                //assert(earliestAbsorberPos[absorberWalk]>1);
-                            }
+                             
+                             if(EARLYABSORB){
+                                 if(oldToNew[e.toNode].pos_in_walk < earliestAbsorberPos[absorberWalk]){
+                                     earliestAbsorberPos[absorberWalk] =oldToNew[e.toNode].pos_in_walk ;
+                                     assert(earliestAbsorberPos[absorberWalk]>0);
+                                 }
+                                 
+                             }
                             
                             isAnAbsorbedWalk[oldToNew[uid].finalWalkId]=true;
                             g->addEdge(absorberWalk, absorbedWalk);
@@ -803,7 +817,8 @@ void AbsorbGraph::sorterIndexAndAbsorbGraphMaker(){
         prevWalkId = finalWalkId;
     }
     
-    //earlyAbsorb(earliestAbsorberPos);
+    if(EARLYABSORB)
+        earlyAbsorb(earliestAbsorberPos, isAnAbsorbedWalk);
     if(GETLOWERBOUND_CC){
         lowerboundcc();
     }
@@ -832,6 +847,7 @@ void AbsorbGraph::sorterIndexAndAbsorbGraphMaker(){
         }
         variout.close();
     }
+    delete [] isAnAbsorbedWalk;
     if(ALGOMODE==PROFILE_ONLY_ABS){
         absorbGraphNumCC_endAbosrb;
         ofstream globalStatFile("global_stat", std::fstream::out | std::fstream::app);
@@ -997,30 +1013,10 @@ void  AbsorbGraph::removeCycleFromAbsorbGraphRec()
 
 void AbsorbGraph::removeCycleFromAbsorbGraph()
 {
-    removeCycleFromAbsorbGraphRec();
-    postorder_master();
-    return;
+    //removeCycleFromAbsorbGraphRec();
+    //postorder_master();
+    //return;
     //
-    
-    if(0==2){
-        assert(absorbGraphCycleRemoved.size()!=0);
-        for(int uid = 0; uid<adjList.size(); uid++){
-            vector<edge_t> adjv = absorbGraph[uid];
-            for(edge_t e : adjv){
-                absorbGraphCycleRemoved[uid].push(e);
-            }
-        }
-        queue<int>a = printSCCs();
-        
-        delete g;
-        while(!a.empty()){
-            orderOfUnitigs.push(oldToNew[a.front()].finalWalkId);
-            a.pop();
-        }
-        
-        return;
-    }
-    
     char *visited = new char[countNewNode];
     int *parent= new int[adjList.size()];
     for(int i = 0; i < countNewNode; i++)
@@ -1034,423 +1030,135 @@ void AbsorbGraph::removeCycleFromAbsorbGraph()
     map<int, edge_t> edmap;
     stack<int> stak;
     
-    queue<int> dq = printSCCs();
+    
+    
+    vector<pair<int, int> > indegree(countNewNode, make_pair(0,0));
+    vector<int> oldnode(countNewNode, 0);
+    for(int i = 0; i< indegree.size(); i++){
+        indegree[i] = make_pair(i, 0);
+    }
+    
+    for (std::map<int, vector<edge_t> >::iterator it=absorbGraph.begin(); it!=absorbGraph.end(); ++it){
+        int x =  it->first ;
+        vector<edge_t> adjx = it->second;
+        for(edge_t e: adjx){
+            int walk = oldToNew[e.toNode].finalWalkId;
+            oldnode[walk] =e.toNode;
+            indegree[walk] = make_pair(indegree[walk].first, indegree[walk].second+1);
+        }
+    }
+    
+    deque<int> dq;
+    stack<int> putLast;
+    
+    bool SCCORDER = true;
+    if(SCCORDER){
+        cout<<"scc"<<endl;
+        queue<int> topoorder = printSCCs();
+        while(!topoorder.empty()){
+            int jj =topoorder.front();
+            topoorder.pop();
+            dq.push_front(jj);
+        }
+    }else{
+        for(int ii = 0; ii <adjList.size(); ii++){
+            if(indegree[oldToNew[ii].finalWalkId].second==0){
+                dq.push_front(ii);
+            }else{
+                if(ALGOMODE==TIPANDAB_TIPLATER && (oldToNew[ii].isTip == 1 || oldToNew[ii].isTip == 2)){
+                    putLast.push(ii);
+                }else{
+                    dq.push_back(ii);
+                }
+                //            else if(indegree[oldToNew[ii].finalWalkId].second==1){
+                //                putLast.push(ii);
+                //                //cout<<"h\n";
+                //            }
+            }
+        }
+        while(!putLast.empty()){
+            int jj =putLast.top();
+            putLast.pop();
+            dq.push_back(jj);
+        }
+    }
+    
     delete g;
     cout<<"[3.3.0] SCC done."<<endl;
     
     while(!dq.empty()){
         int qtop = dq.front();
-        dq.pop();
+        dq.pop_front();
         if(visited[oldToNew[qtop].finalWalkId] == 'w' ){
             //visited[oldToNew[qtop].finalWalkId] = 'g';
             stak.push(qtop);
             // Push the current source node.
             orderOfUnitigs.push(oldToNew[qtop].finalWalkId);
             
+            
+            int stringSize = 0;
             while (!stak.empty())
             {
                 int uid = stak.top();
                 stak.pop();
                 
-                if(parent[uid]!=-1){
-                    edge_t e = edmap[uid];
-                    int alluid = parent[uid];
-                    absorbGraphCycleRemoved[parent[uid]].push(e);
-                    if(e.left == nodeSign[alluid] && e.right == nodeSign[e.toNode] )
-                        absorbedCategory[e.toNode] = '1';
-                    if(e.left == nodeSign[alluid] && e.right != nodeSign[e.toNode] )
-                        absorbedCategory[e.toNode] = '2';
-                    if(e.left != nodeSign[alluid] && e.right != nodeSign[e.toNode] )
-                        absorbedCategory[e.toNode] = '3';
-                    if(e.left != nodeSign[alluid] && e.right == nodeSign[e.toNode] )
-                        absorbedCategory[e.toNode] = '4';
-                    if(ABSORBONLYTWO)
-                        assert(absorbedCategory[e.toNode] != '2' && absorbedCategory[e.toNode] != '3' );
-                }
-                
-                vector<int> uidsNeighbors = getAllUidsInWalk( oldToNew[uid].finalWalkId);
-                for(int alluid:uidsNeighbors){
-                    vector<edge_t> adjv = absorbGraph[alluid];
-                    for(edge_t e : adjv){
-                        int i = e.toNode;
-                        if (visited[oldToNew[i].finalWalkId] == 'g'){
-                            //removed edge
-                            //edmap[e.toNode] = e;
-                            //parent[e.toNode] = alluid;
-                        }else if (visited[oldToNew[i].finalWalkId] == 'w'){
-                            //cout<<"adding edge: "<<alluid<<"->"<<e.toNode<<"["<<oldToNew[alluid].finalWalkId<<","<<oldToNew[e.toNode].finalWalkId<<"]"<<"scc:"<<oldToNew[alluid].sccid<<","<<oldToNew[e.toNode].sccid<<endl;
-                            //visited[oldToNew[alluid].finalWalkId] = 'g';
-                            edmap[e.toNode] = e;
-                            parent[e.toNode] = alluid;
-                            stak.push(e.toNode);
+                if(visited[oldToNew[uid].finalWalkId] == 'w'){
+                    visited[oldToNew[uid].finalWalkId] = 'g';
+                    if(parent[uid]!=-1){
+                        edge_t e = edmap[uid];
+                        int alluid = parent[uid];
+                        absorbGraphCycleRemoved[parent[uid]].push(e);
+                        absorbed[oldToNew[e.toNode].finalWalkId] = true;
+                        if(e.left == nodeSign[alluid] && e.right == nodeSign[e.toNode] )
+                            absorbedCategory[e.toNode] = '1';
+                        if(e.left == nodeSign[alluid] && e.right != nodeSign[e.toNode] )
+                            absorbedCategory[e.toNode] = '2';
+                        if(e.left != nodeSign[alluid] && e.right != nodeSign[e.toNode] )
+                            absorbedCategory[e.toNode] = '3';
+                        if(e.left != nodeSign[alluid] && e.right == nodeSign[e.toNode] )
+                            absorbedCategory[e.toNode] = '4';
+                        if(ABSORBONLYTWO)
+                            assert(absorbedCategory[e.toNode] != '2' && absorbedCategory[e.toNode] != '3' );
+                    }
+                    
+                    vector<int> uidsNeighbors = getAllUidsInWalk( oldToNew[uid].finalWalkId);
+                    for(int alluid:uidsNeighbors){
+                        stringSize+=unitigs.at(alluid).sequence.length();
+                        vector<edge_t> adjv = absorbGraph[alluid];
+                        for(edge_t e : adjv){
+                            int i = e.toNode;
+                            if (visited[oldToNew[i].finalWalkId] == 'g'){
+                                //removed edge
+                                //edmap[e.toNode] = e;
+                                //parent[e.toNode] = alluid;
+                            }else if (visited[oldToNew[i].finalWalkId] == 'w'){
+                                //cout<<"adding edge: "<<alluid<<"->"<<e.toNode<<"["<<oldToNew[alluid].finalWalkId<<","<<oldToNew[e.toNode].finalWalkId<<"]"<<"scc:"<<oldToNew[alluid].sccid<<","<<oldToNew[e.toNode].sccid<<endl;
+                                //visited[oldToNew[alluid].finalWalkId] = 'g';
+                                edmap[e.toNode] = e;
+                                parent[e.toNode] = alluid;
+                                stak.push(e.toNode);
+                            }
                         }
                     }
                 }
-                if(visited[oldToNew[uid].finalWalkId] == 'w' ){
-                    visited[oldToNew[uid].finalWalkId] = 'g';
-                }
+                
                 visited[oldToNew[uid].finalWalkId]  = 'b';
             }
+            //reservedStringSize.push(stringSize);
         }
     }
     delete[] visited;
     delete[] parent;
-    //absorbGraph.clear();
+    absorbGraph.clear();
     postorder_master();
 }
 
-void AbsorbGraph::iterWalkStringMaker(int startWalkIndex2, int depth, int Kpass, vector<char>& color){
+
+void AbsorbGraph::iterSpellTested(int startWalkIndex2, int depth, int Kpass, vector<char>& color, int stringSize){
     segfaultfile<<startWalkIndex2<<" walk: "<<get<1>(sorter[startWalkIndex2])<<endl;
     
     //if(isItAPrintedWalk[get<1>(sorter[startWalkIndex2])]) return "";
     //vector<char> color(adjList.size(), 'w');
-    stack<int> recurStak;//startWalkIndex
-    recurStak.push(startWalkIndex2);
-    
-    
-    
-    while(!recurStak.empty()){
-        
-        segfaultfile<<"stack: "<<recurStak.size()<<" top:"<<recurStak.top()<<endl;
-        //cout<<recurStak.top()<<endl;
-        //int thestart =  recurStak.top();
-        int currSorterIndex = recurStak.top();
-        recurStak.pop();
-        string& walkString = constructedStrings[get<1>(sorter[currSorterIndex])];
-        
-        bool isThisAbsorbedWalk = false;;
-        char walkAbsorbedCategory = '0';
-        string unitigString = "";
-        
-        
-        while(true){
-            assert(currSorterIndex<sorter.size());
-            MyTypes::fourtuple n = sorter[currSorterIndex];
-            int finalWalkId = get<1>(n);
-            
-            depthfile<<get<0>(n)<<" "<<depth<<endl;
-            
-            //@ABSORB
-            if( MODE_ABSORPTION_NOTIP ){
-                if (isItAPrintedWalk[get<1>(sorter[currSorterIndex])]){
-                    color[currSorterIndex] = 'b';
-                    //recurStak.pop();
-                    return;
-                }
-            }
-            
-            int uid = get<0>(n);
-            
-            if(color[currSorterIndex]=='w'){
-                recurStak.push(currSorterIndex);
-                if(absorbGraphCycleRemoved[uid].size() > 0){         /*populate two types of stacks*/
-                    stack<edge_t> st = absorbGraphCycleRemoved[uid];
-                    while(!st.empty()){
-                        edge_t st_top = st.top();
-                        if(absorbedCategory[st_top.toNode]=='3' or absorbedCategory[st_top.toNode]=='4'  ){
-                            recurStak.push(sorterIndexMap[oldToNew[st_top.toNode].finalWalkId]);
-                        }else if(absorbedCategory[st_top.toNode]=='1' or absorbedCategory[st_top.toNode]=='2' ){
-                            recurStak.push(sorterIndexMap[oldToNew[st_top.toNode].finalWalkId]);
-                        }else{
-                            assert(false);
-                        }
-                        st.pop();
-                    }
-                }
-                color[currSorterIndex] = 'g';
-                break;
-            }
-//            if(color[currSorterIndex]=='b'){
-//                cout<<"WARNING: "<<currSorterIndex<<" uid:" << get<0>(sorter[currSorterIndex])<<" duplicate."<<endl;
-//                break;
-//            }
-            assert(color[currSorterIndex]=='g');
-            // past this mean color is grey
-            if(nodeSign[uid] == false){
-                unitigString =  reverseComplement(unitigs.at(uid).sequence);
-            }else{
-                unitigString =  (unitigs.at(uid).sequence);
-            }
-            
-            
-            
-            stack<edge_t> stType12;
-            stack<edge_t> stType34;
-            if(absorbGraphCycleRemoved[uid].size() > 0){         /*populate two types of stacks*/
-                stack<edge_t> st = absorbGraphCycleRemoved[uid];
-                while(!st.empty()){
-                    edge_t st_top = st.top();
-                    if(absorbedCategory[st_top.toNode]=='3' or absorbedCategory[st_top.toNode]=='4'  ){
-                        stType34.push(st_top);
-                    }else if(absorbedCategory[st_top.toNode]=='1' or absorbedCategory[st_top.toNode]=='2' ){
-                        stType12.push(st_top);
-                    }else{
-                        assert(false);
-                    }
-                    st.pop();
-                }
-            }
-            
-            //walk starting AND not absorbed
-            if( isItWalkStarting(uid) && absorbedCategory[uid]=='0' && MODE_ABSORPTION_NOTIP){
-                walkString+= cutSuf(unitigString, Kpass);
-                
-                while(!stType34.empty()){
-                    int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-                    char isSmallK =stType34.top().isSmallK;
-                    
-                    
-                    stType34.pop();
-                    if(isSmallK=='y'){
-                        //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                    }else{
-                        
-                        walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                        constructedStrings[get<1>(sorter[sindex])] = "";
-                         constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
-                    }
-                    
-                }
-                
-                walkString+= suf(unitigString, Kpass);
-                
-                
-                
-                while(!stType12.empty()){
-                    int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-                    char isSmallK =stType12.top().isSmallK;
-                    
-                    stType12.pop();
-                    if(isSmallK=='y'){
-                        //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                    }else{
-                        
-                        walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                        constructedStrings[get<1>(sorter[sindex])] = "";
-                        constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
-                    }
-                }
-            }
-            
-            
-            //not walk starting AND not absorbed
-            if(!isItWalkStarting(uid) && absorbedCategory[uid]=='0' && MODE_ABSORPTION_NOTIP){
-                while(!stType34.empty()){
-                    int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-                    char isSmallK =stType34.top().isSmallK;
-                    
-                    stType34.pop();
-                    
-                    if(isSmallK=='y'){
-                        //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                    }else{
-                        assert(sindex<adjList.size());
-                        
-                        walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                        constructedStrings[get<1>(sorter[sindex])] = "";
-                        constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
-                    }
-                }
-                
-                walkString+= cutPref(unitigString, Kpass);
-                
-                
-                
-                while(!stType12.empty()){
-                    int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-                    
-                    char isSmallK =stType12.top().isSmallK;
-                    
-                    
-                    stType12.pop();
-                    if(isSmallK=='y'){
-                        //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                    }else{
-                        
-                        walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                        constructedStrings[get<1>(sorter[sindex])] = "";
-                        constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
-                    }
-                }
-            }
-            
-            //not walk starting AND absorbed
-            //        if(pos_in_walk != 1 && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
-            //            assert(false);
-            //        }
-            
-            //ERROR ONE
-            
-            if(isItWalkStarting(uid) && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
-                // assert(stType34.empty());
-                //           assert(stType12.empty());
-                //if(absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
-                isThisAbsorbedWalk=true;
-                walkAbsorbedCategory =absorbedCategory[uid];
-                
-                if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
-                    walkString+=cutSuf(unitigString, Kpass);
-                    
-                    //                string A = pref(walkString, Kpass);
-                    //                string B = cutPref(walkString, Kpass);
-                    //                walkString = A;
-                    //                while(!stType34.empty()){
-                    //                    int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-                    //                    char isSmallK =stType34.top().isSmallK;
-                    //
-                    //                    if(isItAPrintedWalk[oldToNew[stType34.top().toNode].finalWalkId]==true){
-                    //                        stType34.pop();
-                    //                        continue;
-                    //                    }
-                    //                    stType34.pop();
-                    //
-                    //                    if(isSmallK=='y'){
-                    //                        //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                    //                    }else{
-                    //                        walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, K);
-                    //                    }
-                    //                }
-                    //                walkString += B;
-                    
-                }
-                if(!ABSORBONLYTWO){
-                    if(absorbedCategory[uid]=='1') walkString+="+";
-                    else if(absorbedCategory[uid]=='4') walkString+="-";
-                }
-                
-                //            if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
-                //                while(!stType34.empty()){
-                //                    int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-                //                    char isSmallK =stType34.top().isSmallK;
-                //                    stType34.pop();
-                //
-                //                    if(isSmallK=='y'){
-                //                        //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                //                    }else{
-                //                        walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, K);
-                //                    }
-                //                }
-                //            }
-                
-                
-                if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
-                    walkString+= cutPref(unitigString, Kpass);
-                    while(!stType12.empty()){
-                        //assert(isItAPrintedWalk[oldToNew[stType12.top().toNode].finalWalkId] == false);
-                        int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-                        char isSmallK =stType12.top().isSmallK;
-                        
-                        stType12.pop();
-                        
-                        if(isSmallK=='y'){
-                            //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                        }else{
-                            
-                            walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                            constructedStrings[get<1>(sorter[sindex])] = "";
-                            constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
-                        }
-                    }
-                }
-                
-                //            while(!stType12.empty()){
-                //                int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-                //                char isSmallK =stType12.top().isSmallK;
-                //                stType12.pop();
-                //
-                //                if(isSmallK=='y'){
-                //                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                //                }else{
-                //                    walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, K);
-                //                }
-                //            }
-                if(!ABSORBONLYTWO){
-                    if(absorbedCategory[uid]=='3') walkString+="+";
-                    else if(absorbedCategory[uid]=='2') walkString+="-";
-                    
-                    while(!stType12.empty()){
-                        int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-                        char isSmallK =stType12.top().isSmallK;
-                         stType12.pop();
-                        
-                        if(isSmallK=='y'){
-                            //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                        }else{
-                            
-                            walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                            constructedStrings[get<1>(sorter[sindex])] = "";
-                            constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
-                        }
-                    }
-                }
-            }
-            
-            //earlyAbsorb
-            if(!isItWalkStarting(uid) && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
-                isThisAbsorbedWalk=true;
-                walkAbsorbedCategory =absorbedCategory[uid];
-                assert(stType34.empty());
-                assert(stType12.empty());
-                
-                if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
-                    string signs;
-                    if(absorbedCategory[uid]=='1') signs="+";
-                    else if(absorbedCategory[uid]=='4') signs="-";
-                    
-                    walkString = cutSuf(walkString, Kpass) + signs + cutPref(unitigString, Kpass);
-                }
-                
-                
-                if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3' ){
-                    
-                    //if(!ABSORBONLYTWO){
-                    string signs;
-                    if(absorbedCategory[uid]=='3') signs="+";
-                    else if(absorbedCategory[uid]=='2') signs="-";
-                    walkString = cutSuf(walkString, Kpass) + unitigString;
-                    walkString = cutSuf(walkString, Kpass) + signs;
-                    // }
-                    
-                    
-                }
-            }
-            
-            
-            if(color[currSorterIndex]=='g'){
-                color[currSorterIndex] = 'b';
-                //recurStak.pop();
-            }else{
-                assert(false);
-            }
-            
-            if(ABSORBONLYTWO){
-                if(walkAbsorbedCategory=='1') walkString="["+walkString+"]";
-                else if(walkAbsorbedCategory=='4') walkString="("+walkString+")";
-            }else{
-                if(isThisAbsorbedWalk) walkString="["+walkString+"]";
-            }
-            
-            if(currSorterIndex+1 == sorter.size()) {
-                if(MODE_ABSORPTION_NOTIP){
-                    isItAPrintedWalk[finalWalkId] = true;
-                }
-                break;
-            }else if(get<1>(sorter[currSorterIndex+1]) != finalWalkId){
-                isItAPrintedWalk[finalWalkId] = true;
-                break;
-            }
-            currSorterIndex++;
-        }
-    }
-}
-
-
-
-void AbsorbGraph::iterWalkStringMakerCopy(int startWalkIndex2, int depth, int Kpass, vector<char>& color2){
-    segfaultfile<<startWalkIndex2<<" walk: "<<get<1>(sorter[startWalkIndex2])<<endl;
-    
-    //if(isItAPrintedWalk[get<1>(sorter[startWalkIndex2])]) return "";
-    vector<char> color(adjList.size(), 'w');
     stack<int> recurStak;//startWalkIndex
     recurStak.push(startWalkIndex2);
     
@@ -1467,6 +1175,7 @@ void AbsorbGraph::iterWalkStringMakerCopy(int startWalkIndex2, int depth, int Kp
         string unitigString = "";
         
         string& walkString = constructedStrings[get<1>(sorter[currSorterIndex])];
+        //walkString.reserve(stringSize);
         
         while(true){
             
@@ -1539,22 +1248,71 @@ void AbsorbGraph::iterWalkStringMakerCopy(int startWalkIndex2, int depth, int Kp
             //walkstarting ####
             if( isItWalkStarting(uid)){
                 if(absorbedCategory[uid]=='0'){ //not absorbed
-                    walkString += unitigString;
-                }else{
-                    isThisAbsorbedWalk=true;
-                    walkAbsorbedCategory =absorbedCategory[uid];
-                    string sign = (absorbedCategory[uid]=='2' or absorbedCategory[uid]=='4')?"-":"+";
-                    if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
-                        //walkString += splitA(unitigString, Kpass);
-                        //swalkString += splitX(unitigString, Kpass);
-                        walkString += cutSuf(unitigString, Kpass);
-                        walkString += sign;
-                        
+                    if(unitigString.length()<2*(K-1)){
+                        walkString += unitigString;
                     }else{
-                        walkString += sign;
+                        walkString += splitA(unitigString, Kpass);
+                        while(!stType34.empty()){
+                            int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
+                            stType34.pop();
+                            assert(constructedStrings[get<1>(sorter[sindex])]!="");
+                            walkString += constructedStrings[get<1>(sorter[sindex])];
+                            constructedStrings[get<1>(sorter[sindex])] = "";
+                            constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                        }
                         walkString += splitX(unitigString, Kpass);
                         walkString += splitB(unitigString, Kpass);
                     }
+                }else{
+                    isThisAbsorbedWalk=true;
+                    walkAbsorbedCategory =absorbedCategory[uid];
+                    
+                    if(unitigString.length()>=2*(K-1)){
+                        string sign = (absorbedCategory[uid]=='2' or absorbedCategory[uid]=='4')?"-":"+";
+                        if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
+                            //walkString += splitA(unitigString, Kpass);
+                            //walkString += splitX(unitigString, Kpass);
+                            string apart = cutSuf(unitigString, Kpass);
+                            walkString += pref(apart, Kpass);
+                            while(!stType34.empty()){
+                                int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
+                                stType34.pop();
+                                assert(constructedStrings[get<1>(sorter[sindex])]!="");
+                                walkString += constructedStrings[get<1>(sorter[sindex])];
+                                constructedStrings[get<1>(sorter[sindex])] = "";
+                                constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                            }
+                            walkString += cutPref(apart, Kpass);
+                            walkString += sign;
+                            
+                        }else{
+                            walkString += sign;
+                            while(!stType34.empty()){
+                                int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
+                                stType34.pop();
+                                assert(constructedStrings[get<1>(sorter[sindex])]!="");
+                                walkString += constructedStrings[get<1>(sorter[sindex])];
+                                constructedStrings[get<1>(sorter[sindex])] = "";
+                                constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                            }
+                            walkString += splitX(unitigString, Kpass);
+                            walkString += splitB(unitigString, Kpass);
+                        }
+                    }else{
+                        string sign = (absorbedCategory[uid]=='2' or absorbedCategory[uid]=='4')?"-":"+";
+                        if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
+                            //walkString += splitA(unitigString, Kpass);
+                            //swalkString += splitX(unitigString, Kpass);
+                            walkString += cutSuf(unitigString, Kpass);
+                            walkString += sign;
+                            
+                        }else{
+                            walkString += sign;
+                            walkString += splitX(unitigString, Kpass);
+                            walkString += splitB(unitigString, Kpass);
+                        }
+                    }
+                    
                 }
                 while(!stType12.empty()){
                     //assert(false);
@@ -1566,26 +1324,53 @@ void AbsorbGraph::iterWalkStringMakerCopy(int startWalkIndex2, int depth, int Kp
                     constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
                 }
             }else{ //not walk starting
-                //34
-                while(!stType34.empty()){
-                    int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-                    stType34.pop();
-                    assert(constructedStrings[get<1>(sorter[sindex])]!="");
-                    walkString += constructedStrings[get<1>(sorter[sindex])];
-                    constructedStrings[get<1>(sorter[sindex])] = "";
-                    constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                if(absorbedCategory[uid]=='0'){
+                    //34
+                    while(!stType34.empty()){
+                        int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
+                        stType34.pop();
+                        assert(constructedStrings[get<1>(sorter[sindex])]!="");
+                        walkString += constructedStrings[get<1>(sorter[sindex])];
+                        constructedStrings[get<1>(sorter[sindex])] = "";
+                        constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                    }
+                    walkString += splitX(unitigString, Kpass);
+                    walkString += splitB(unitigString, Kpass);
+                    //12
+                    while(!stType12.empty()){
+                        int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
+                        stType12.pop();
+                        walkString += constructedStrings[get<1>(sorter[sindex])];
+                        constructedStrings[get<1>(sorter[sindex])] = "";
+                        constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                    }
                 }
-                walkString += splitX(unitigString, Kpass);
-                walkString += splitB(unitigString, Kpass);
-                //12
-                while(!stType12.empty()){
-                    int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-                    stType12.pop();
-                    walkString += constructedStrings[get<1>(sorter[sindex])];
-                    constructedStrings[get<1>(sorter[sindex])] = "";
-                    constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                //earlyAbsorb
+                if(absorbedCategory[uid]!='0'){
+                    isThisAbsorbedWalk=true;
+                    walkAbsorbedCategory =absorbedCategory[uid];
+                    assert(stType34.empty());
+                    assert(stType12.empty());
+                    
+                    if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
+                        string signs;
+                        if(absorbedCategory[uid]=='1') signs="+";
+                        else if(absorbedCategory[uid]=='4') signs="-";
+                        walkString = cutSuf(walkString, Kpass) + signs + cutPref(unitigString, Kpass);
+                    }
+                                            
+                    if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3' ){
+                        string signs;
+                        if(absorbedCategory[uid]=='3') signs="+";
+                        else if(absorbedCategory[uid]=='2') signs="-";
+                        walkString = cutSuf(walkString, Kpass) + unitigString;
+                        walkString = cutSuf(walkString, Kpass) + signs;
+                    }
                 }
+                
             }
+            
+            
             
             if(color[currSorterIndex]=='g'){
                 color[currSorterIndex] = 'b';
@@ -1601,7 +1386,8 @@ void AbsorbGraph::iterWalkStringMakerCopy(int startWalkIndex2, int depth, int Kp
                     if(walkAbsorbedCategory=='1') walkString="["+walkString+"]";
                     else if(walkAbsorbedCategory=='4') walkString="("+walkString+")";
                 }else{
-                    if(absorbedCategory[get<0>(sorter[sorterIndexMap[finalWalkId]])] != '0') walkString="["+walkString+"]";
+                    //if(absorbedCategory[get<0>(sorter[sorterIndexMap[finalWalkId]])] != '0') walkString="["+walkString+"]";
+                    if(absorbed[finalWalkId] == true) walkString="["+walkString+"]";
                 }
                 isItAPrintedWalk[finalWalkId] = true;
                 break;
@@ -1611,94 +1397,485 @@ void AbsorbGraph::iterWalkStringMakerCopy(int startWalkIndex2, int depth, int Kp
     }
 }
 
-void AbsorbGraph::recursivePrinter(int& startWalkIndex, int depth, int Kpass){
-    
-    assert(startWalkIndex<sorter.size());
-    assert(!obsoleteWalkId[get<1>(sorter[startWalkIndex])]);
-    
-    
-    //assert(!obsoleteWalkId[startWalkIndex]);
-    
-    MyTypes::fourtuple n = sorter[startWalkIndex];
-    int finalWalkId = get<1>(n);
-    
-    vector<int> uids = getAllUidsInWalk(finalWalkId);
-    stack<edge_t> stType34, stType12;
-    isItAPrintedWalk[finalWalkId] = true;
-    
-    
-    for(int uidi = 0; uidi<uids.size(); uidi++){
-        int uid = uids[uidi];
-        string unitigString =  (nodeSign[uid]? unitigs.at(uid).sequence: reverseComplement(unitigs.at(uid).sequence));
-        
-        if(absorbGraphCycleRemoved[uid].size() > 0){
-            stack<edge_t> st = absorbGraphCycleRemoved[uid];
-            while(!st.empty()){
-                edge_t st_top = st.top();
-                if(absorbedCategory[st_top.toNode]=='3' or absorbedCategory[st_top.toNode]=='4'  ){
-                    stType34.push(st_top);
-                }else if(absorbedCategory[st_top.toNode]=='1' or absorbedCategory[st_top.toNode]=='2' ){
-                    stType12.push(st_top);
-                }else{
-                    cout<<"errorrrrrrrrrrr"<<endl;
-                    assert(false);
-                }
-                st.pop();
-            }
-        }
-        
-        
-        if(uidi == 0){
-            if(absorbedCategory[uid]=='0'){
-                abfile<<">\n";
-            }
-            if( absorbedCategory[uid]=='0' or absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
-                abfile<< cutSuf(unitigString, Kpass);
-            }
-            if( absorbedCategory[uid]=='1' ){
-                abfile<<'+';
-            }
-            if( absorbedCategory[uid]=='4' ){
-                abfile<<'-';
-            }
-        }
-        while(!stType34.empty()){
-            int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-            //assert(isItAPrintedWalk[oldToNew[stType34.top().toNode].finalWalkId] == false);
-            abfile<<"[";
-            recursivePrinter(sindex, depth+1, K);
-            abfile<<"]";
-            stType34.pop();
-        }
-        if(uidi==0){
-            if(absorbedCategory[uid]=='0'){
-                abfile<<suf(unitigString, Kpass);
-            }else if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4'){
-                abfile<<cutPref(unitigString, Kpass); //finish print if 1, 4
-            }
-            
-            if(absorbedCategory[uid]=='3') abfile<<"+";
-            else if(absorbedCategory[uid]=='2') abfile<<"-";
-        }else{
-            abfile<<cutPref(unitigString, Kpass); //finish print here
-        }
-        
-        while(!stType12.empty()){
-            int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-            //assert(isItAPrintedWalk[oldToNew[stType12.top().toNode].finalWalkId] == false);
-            abfile<<"[";
-            recursivePrinter(sindex, depth+1, K);
-            abfile<<"]";
-            stType12.pop();
-        }
-    }
-    
-    if(depth==0) {
-        abfile<<"\n";
+
+
+
+
+inline bool file_exists_test (const std::string& name) {
+    if (FILE *file = fopen(name.c_str(), "r")) {
+        fclose(file);
+        return true;
+    } else {
+        return false;
     }
 }
 
 
+string IntToString(int a)
+{
+    ostringstream temp;
+    temp << a;
+    return temp.str();
+}
+
+
+
+//void deleteWalkFile(int wid){
+//    string filename = "ustwalk" + IntToString(wid);
+//    if(!file_exists_test(filename)){
+//        cout<<filename + " File does not exist"<<endl;
+//        exit(3);
+//    }
+//    system(("rm -rf "+filename).c_str());
+//}
+
+string readAndDeleteWalkFile(int wid){
+    string filename = "ustwalk" + IntToString(wid);
+    if(!file_exists_test(filename)){
+        cout<<"\n"<<filename + " File does not exist"<<endl;
+        exit(3);
+    }
+    ifstream f(filename); //taking file as inputstream
+    string str;
+    if(f) {
+       ostringstream ss;
+       ss << f.rdbuf(); // reading data
+       str = ss.str();
+    }
+    f.close();
+    system(("rm -rf "+filename).c_str());
+    return str;
+}
+
+
+
+void AbsorbGraph::iterSpellSlowDisk(int startWalkIndex2, int depth, int Kpass, vector<char>& color){
+   
+    fstream FOUT;
+    //("ust_unitiglabel.txt");
+    
+    segfaultfile<<startWalkIndex2<<" walk: "<<get<1>(sorter[startWalkIndex2])<<endl;
+    
+    //if(isItAPrintedWalk[get<1>(sorter[startWalkIndex2])]) return "";
+    //vector<char> color(adjList.size(), 'w');
+    stack<int> recurStak;//startWalkIndex
+    recurStak.push(startWalkIndex2);
+    
+    while(!recurStak.empty()){
+        
+        segfaultfile<<"stack: "<<recurStak.size()<<" top:"<<get<1>(sorter[recurStak.top()])<<endl;
+        //cout<<recurStak.top()<<endl;
+        //int thestart =  recurStak.top();
+        int currSorterIndex = recurStak.top();
+        recurStak.pop();
+        
+        bool isThisAbsorbedWalk = false;;
+        char walkAbsorbedCategory = '0';
+        string unitigString = "";
+        
+        string& walkString = constructedStrings[get<1>(sorter[currSorterIndex])];
+        FOUT.open("ustwalk"+IntToString(get<1>(sorter[currSorterIndex])),std::fstream::app);
+        while(true){
+            
+            //cout<<walkString<<endl;
+            assert(currSorterIndex<sorter.size());
+            MyTypes::fourtuple n = sorter[currSorterIndex];
+            int finalWalkId = get<1>(n);
+            
+            depthfile<<get<0>(n)<<" "<<depth<<endl;
+            
+            if (isItAPrintedWalk[get<1>(sorter[currSorterIndex])]){
+                //color[currSorterIndex] = 'b';
+                //recurStak.pop();
+                return;
+            }
+//            if(color[currSorterIndex] == 'b'){
+//                return;
+//            }
+            int uid = get<0>(n);
+            
+            if(color[currSorterIndex]=='w'){
+                int wid = get<1>(n);
+                recurStak.push(currSorterIndex);
+                if(absorbGraphCycleRemoved[uid].size() > 0){         /*populate two types of stacks*/
+                    stack<edge_t> st = absorbGraphCycleRemoved[uid];
+                    while(!st.empty()){
+                        edge_t st_top = st.top();
+                        if(absorbedCategory[st_top.toNode]=='3' or absorbedCategory[st_top.toNode]=='4'  ){
+                            recurStak.push(sorterIndexMap[oldToNew[st_top.toNode].finalWalkId]);
+                        }else if(absorbedCategory[st_top.toNode]=='1' or absorbedCategory[st_top.toNode]=='2' ){
+                            recurStak.push(sorterIndexMap[oldToNew[st_top.toNode].finalWalkId]);
+                        }else{
+                            assert(false);
+                        }
+                        st.pop();
+                    }
+                }
+                
+                color[currSorterIndex] = 'g';
+                break;
+            }
+//            if(color[currSorterIndex]=='b'){
+//                cout<<"WARNING: "<<currSorterIndex<<" uid:" << get<0>(sorter[currSorterIndex])<<" duplicate."<<endl;
+//                break;
+//            }
+            assert(color[currSorterIndex]=='g');
+            // past this mean color is grey
+            if(nodeSign[uid] == false){
+                unitigString =  reverseComplement(unitigs.at(uid).sequence);
+            }else{
+                unitigString =  (unitigs.at(uid).sequence);
+            }
+            
+            stack<edge_t> stType12;
+            stack<edge_t> stType34;
+            if(absorbGraphCycleRemoved[uid].size() > 0){         /*populate two types of stacks*/
+                stack<edge_t> st = absorbGraphCycleRemoved[uid];
+                while(!st.empty()){
+                    edge_t st_top = st.top();
+                    if(absorbedCategory[st_top.toNode]=='3' or absorbedCategory[st_top.toNode]=='4'  ){
+                        stType34.push(st_top);
+                    }else if(absorbedCategory[st_top.toNode]=='1' or absorbedCategory[st_top.toNode]=='2' ){
+                        stType12.push(st_top);
+                    }else{
+                        assert(false);
+                    }
+                    st.pop();
+                }
+            }
+            
+            int walkFileId = oldToNew[uid].finalWalkId;
+            
+            //walkstarting ####
+            
+            
+            //cout<<walkFileId<<endl;
+            
+            
+            if( isItWalkStarting(uid)){
+                
+                if(absorbedCategory[uid]=='0'){ //not absorbed
+                    if(unitigString.length()<2*(K-1)){
+                        
+                        //walkString += unitigString;
+                        FOUT<<unitigString;
+                        
+                    }else{
+                        //walkString += splitA(unitigString, Kpass);
+                        FOUT<<splitA(unitigString, Kpass);
+                        
+                        while(!stType34.empty()){
+                            int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
+                            stType34.pop();
+                            assert(constructedStrings[get<1>(sorter[sindex])]!="");
+                            
+                            //walkString += constructedStrings[get<1>(sorter[sindex])];
+                            FOUT<<"["<<readAndDeleteWalkFile(get<1>(sorter[sindex]))<<"]";
+                            
+                            constructedStrings[get<1>(sorter[sindex])] = "";
+                            constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                           
+                            
+                        }
+                        //walkString += splitX(unitigString, Kpass);
+                        FOUT<<splitX(unitigString, Kpass);
+                        
+                        //walkString += splitB(unitigString, Kpass);
+                        FOUT<<splitB(unitigString, Kpass);
+                    }
+                }else{
+                    isThisAbsorbedWalk=true;
+                    walkAbsorbedCategory =absorbedCategory[uid];
+                    
+                    if(unitigString.length()>=2*(K-1)){
+                        string sign = (absorbedCategory[uid]=='2' or absorbedCategory[uid]=='4')?"-":"+";
+                        if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
+                            string apart = cutSuf(unitigString, Kpass);
+                            
+                            //walkString += pref(apart, Kpass);
+                            FOUT<< pref(apart, Kpass);
+                            
+                            while(!stType34.empty()){
+                                int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
+                                stType34.pop();
+                                assert(constructedStrings[get<1>(sorter[sindex])]!="");
+                                
+                                //walkString += constructedStrings[get<1>(sorter[sindex])];
+                                FOUT<<"["<<readAndDeleteWalkFile(get<1>(sorter[sindex]))<<"]";
+                                
+                                constructedStrings[get<1>(sorter[sindex])] = "";
+                                constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                            }
+                            //walkString += cutPref(apart, Kpass);
+                            FOUT<<cutPref(apart, Kpass);
+                            
+                            //walkString += sign;
+                            FOUT<<sign;
+                            
+                        }else{
+                            //walkString += sign;
+                            FOUT<<sign;
+                            
+                            while(!stType34.empty()){
+                                int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
+                                stType34.pop();
+                                assert(constructedStrings[get<1>(sorter[sindex])]!="");
+                                
+                                //walkString += constructedStrings[get<1>(sorter[sindex])];
+                                FOUT<<"["<<readAndDeleteWalkFile(get<1>(sorter[sindex]))<<"]";
+                                
+                                constructedStrings[get<1>(sorter[sindex])] = "";
+                                constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                            }
+                            //walkString += splitX(unitigString, Kpass);
+                            FOUT<<splitX(unitigString, Kpass);
+                            
+                            //walkString += splitB(unitigString, Kpass);
+                            FOUT<<splitB(unitigString, Kpass);
+                        }
+                    }else{
+                        string sign = (absorbedCategory[uid]=='2' or absorbedCategory[uid]=='4')?"-":"+";
+                        if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
+                            //walkString += splitA(unitigString, Kpass);
+                            //swalkString += splitX(unitigString, Kpass);
+                            //walkString += cutSuf(unitigString, Kpass);
+                            FOUT<<cutSuf(unitigString, Kpass);
+                            
+                            //walkString += sign;
+                            FOUT<<sign;
+                            
+                        }else{
+                            //walkString += sign;
+                            FOUT<<sign;
+                            
+                            //walkString += splitX(unitigString, Kpass);
+                            FOUT<<splitX(unitigString, Kpass);
+                            
+                            //walkString += splitB(unitigString, Kpass);
+                            FOUT<<splitB(unitigString, Kpass);
+                        }
+                    }
+                    
+                }
+                while(!stType12.empty()){
+                    //assert(false);
+                    int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
+                    stType12.pop();
+                    assert(constructedStrings[get<1>(sorter[sindex])]!="");
+                    
+                    //walkString += constructedStrings[get<1>(sorter[sindex])];
+                    FOUT<<"["<<readAndDeleteWalkFile(get<1>(sorter[sindex]))<<"]";
+                    
+                    constructedStrings[get<1>(sorter[sindex])] = "";
+                    constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                }
+            }else{ //not walk starting
+                if(absorbedCategory[uid]=='0'){
+                    //34
+                    while(!stType34.empty()){
+                        int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
+                        stType34.pop();
+                        assert(constructedStrings[get<1>(sorter[sindex])]!="");
+                        
+                        //walkString += constructedStrings[get<1>(sorter[sindex])];
+                        FOUT<<"["<<readAndDeleteWalkFile(get<1>(sorter[sindex]))<<"]";
+                        
+                        constructedStrings[get<1>(sorter[sindex])] = "";
+                        constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                    }
+                    //walkString += splitX(unitigString, Kpass);
+                    FOUT<<splitX(unitigString, Kpass);
+                    
+                    //walkString += splitB(unitigString, Kpass);
+                    FOUT<<splitB(unitigString, Kpass);
+                    
+                    //12
+                    while(!stType12.empty()){
+                        int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
+                        stType12.pop();
+                        
+                        //walkString += constructedStrings[get<1>(sorter[sindex])];
+                        FOUT<<"["<<readAndDeleteWalkFile(get<1>(sorter[sindex]))<<"]";
+                        
+                        constructedStrings[get<1>(sorter[sindex])] = "";
+                        constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+                    }
+                }
+                //earlyAbsorb
+                if(absorbedCategory[uid]!='0'){
+                    assert(false);
+                    isThisAbsorbedWalk=true;
+                    walkAbsorbedCategory =absorbedCategory[uid];
+                    assert(stType34.empty());
+                    assert(stType12.empty());
+                    
+                    if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
+                        string signs;
+                        if(absorbedCategory[uid]=='1') signs="+";
+                        else if(absorbedCategory[uid]=='4') signs="-";
+                        walkString = cutSuf(walkString, Kpass) + signs + cutPref(unitigString, Kpass);
+                        
+                        
+                    }
+                                            
+                    if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3' ){
+                        string signs;
+                        if(absorbedCategory[uid]=='3') signs="+";
+                        else if(absorbedCategory[uid]=='2') signs="-";
+                        walkString = cutSuf(walkString, Kpass) + unitigString;
+                        walkString = cutSuf(walkString, Kpass) + signs;
+                    }
+                }
+                
+            }
+            
+            
+            
+            if(color[currSorterIndex]=='g'){
+                color[currSorterIndex] = 'b';
+                //recurStak.pop();
+            }else{
+                assert(false);
+            }
+            
+            
+            
+            if(currSorterIndex+1 == sorter.size() or get<1>(sorter[currSorterIndex+1]) != finalWalkId){
+                if(ABSORBONLYTWO){
+                    if(walkAbsorbedCategory=='1') walkString="["+walkString+"]";
+                    else if(walkAbsorbedCategory=='4') walkString="("+walkString+")";
+                }else{
+                    //if(absorbedCategory[get<0>(sorter[sorterIndexMap[finalWalkId]])] != '0') walkString="["+walkString+"]";
+                    if(absorbed[finalWalkId] == true) walkString="["+walkString+"]";
+                }
+                isItAPrintedWalk[finalWalkId] = true;
+                break;
+            }
+            currSorterIndex++;
+        }
+        FOUT.close();
+    }
+    
+}
+
+void AbsorbGraph::tipSpell(){
+    
+    ofstream uidSequence;
+    string uidSeqFilename = "uidSeq.usttemp"; //"uidSeq"+ mapmode[ALGOMODE] +".txt"
+   uidSequence.open(uidSeqFilename);
+
+    int finalUnitigSerial = 0;
+    for(MyTypes::fourtuple n : sorter){
+        int uid = get<0>(n);
+        int bcalmid = unitigs.at(uid).serial;
+//                        int finalWalkId = get<1>(n);
+//                        int pos_in_walk = get<2>(n);
+//                        int isTip = get<3>(n);
+//                        cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<" "<<oldToNew[uid].isWalkEnd<< " was merged: "<< merged[oldToNew[uid].finalWalkId]<< endl;
+        uidSequence << finalUnitigSerial <<" "<< bcalmid << endl;
+        finalUnitigSerial++;
+    }
+    uidSequence.close();
+
+
+    //system();
+
+    //keep the sequences only
+    system(("awk '!(NR%2)' "+UNITIG_FILE+" > seq.usttemp").c_str());
+    system("sort -n -k 2 -o uidSeq.usttemp uidSeq.usttemp");
+    system("paste -d' ' uidSeq.usttemp seq.usttemp > merged.usttemp ");
+    system("sort -n -k 1 -o merged.usttemp merged.usttemp");
+    
+    system("cat  merged.usttemp  | cut -d' ' -f3 >  seq.usttemp");
+    
+    
+    string walkString = "";
+    ofstream tipFile("ust_ess_tip.txt");
+    
+    
+    ifstream sequenceStringFile ("seq.usttemp");
+
+    //for(int si = 0; si<sorter.size(); si++){
+        int startWalkIndex = 0;
+        while(true){
+            assert(startWalkIndex<sorter.size());
+            MyTypes::fourtuple &n = sorter[startWalkIndex];
+            int finalWalkId = get<1>(n);
+            
+            int uid = get<0>(n);
+            int isTip = get<3>(n);
+            //cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
+            
+//            string unitigString;
+//            if(nodeSign[uid] == false){
+//                unitigString =  reverseComplement(unitigs.at(uid).sequence);
+//            }else{
+//                unitigString =  (unitigs.at(uid).sequence);
+//            }
+//
+            string unitigString;
+            string sequenceFromFile = "";//getline
+            getline (sequenceStringFile,sequenceFromFile);
+            if(nodeSign[uid] == false){
+                unitigString =  reverseComplement(sequenceFromFile);
+            }else{
+                unitigString =  sequenceFromFile;
+            }
+            
+            if( MODE_ABSORPTION_TIP && isTip == 0){//
+                walkString = plus_strings(walkString, unitigString, K);
+                
+            }else if(isTip==1 && MODE_ABSORPTION_TIP){ //right R   R    ]   ]   ]   ]
+                //cut prefix: correct
+                if(0==0){
+                    unitigString = unitigString.substr(K - 1, unitigString.length() - (K - 1));
+                    if(walkString.length()<K){
+                        cout<<"pos: "<<walkString.length()<<endl;
+                    }
+                    walkString += "(" + unitigString + ")";
+                }
+                if(1==0){
+                    tipFile<<">pref\n"<<unitigString<<endl;
+                }
+                
+            }else if(isTip==2 && MODE_ABSORPTION_TIP){ //left L   L    [ [ [
+                //cut suffix: correct
+                if(0==0){
+                    unitigString = unitigString.substr(0, unitigString.length() - (K - 1));
+                    if(walkString.length()<K){
+                        cout<<"pos: "<<walkString.length()<<endl;
+                    }
+                    walkString += "{" + unitigString + "}";
+                }
+                if(1==0){
+                    tipFile<<">suf\n"<<unitigString<<endl;
+                }
+            }
+            
+            if(startWalkIndex+1 == sorter.size()) {
+                int brackets1 = std::count(walkString.begin(), walkString.end(), '(');
+                int brackets2 = std::count(walkString.begin(), walkString.end(), ')');
+                int stringPlus = std::count(walkString.begin(), walkString.end(), '{');
+                int stringMinus = std::count(walkString.begin(), walkString.end(), '}');
+                
+                C_tip_special += brackets1- brackets2 -stringPlus-stringMinus;
+                C_tip_ustitch += walkString.length();
+                
+                tipFile<<">\n"<<walkString<<endl;
+                V_tip_ustitch++;
+                break;
+            }else if(get<1>(sorter[startWalkIndex+1]) != finalWalkId){
+                tipFile<<">\n"<<walkString<<endl;
+                walkString = "";
+                //break;
+            }
+            startWalkIndex++;
+        }
+    //}
+    
+    sequenceStringFile.close();
+    tipFile.close();
+}
 
 void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kpass){
     //iterWalkStringMaker(startWalkIndex, depth, Kpass);
@@ -1708,7 +1885,6 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
     //return "";
     //return iterWalkStringMaker(startWalkIndex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth, Kpass);
     
-    
     segfaultfile<<startWalkIndex<<endl;
     assert(startWalkIndex<adjList.size());
     if(isItAPrintedWalk[get<1>(sorter[startWalkIndex])]) return;
@@ -1717,9 +1893,6 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
     char walkAbsorbedCategory = '0';
     string unitigString = "";
     string& walkString = constructedStrings[get<1>(sorter[startWalkIndex])];
-    
-    int prevWalkId=-1;
-    //int SMALLK = 20;
     
     while(true){
         assert(startWalkIndex<sorter.size());
@@ -1733,26 +1906,9 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
             if (isItAPrintedWalk[finalWalkId]) return;
         }
         
-        
         int uid = get<0>(n);
-        int pos_in_walk = get<2>(n);
         int isTip = get<3>(n);
         //cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
-        
-        
-        //ALLABSORBING
-        //        bool isNextNeighborAbsorbed14 = false;
-        //        int neighborUid = -1;
-        //        if(startWalkIndex+1<sorter.size()){
-        //            neighborUid = get<0>(sorter[startWalkIndex+1]);
-        //            if(ALLABSORBING){
-        //                isNextNeighborAbsorbed14 = (absorbedCategory[neighborUid] == '4' or absorbedCategory[neighborUid] == '1');
-        //            }
-        //        }else{
-        //
-        //        }
-        
-        
         
         if(nodeSign[uid] == false){
             unitigString =  reverseComplement(unitigs.at(uid).sequence);
@@ -1779,7 +1935,6 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
             }
         }
         
-        
         //walk starting AND not absorbed
         if( isItWalkStarting(uid) && absorbedCategory[uid]=='0' && MODE_ABSORPTION_NOTIP){
             walkString+= cutSuf(unitigString, Kpass);
@@ -1794,19 +1949,11 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
                 }
                 
                 stType34.pop();
-                if(isSmallK=='y'){
-                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                }else{
-                    recursiveWalkStringMaker(sindex, depth+1, K);
-                    walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                    constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
-                }
-                
+                recursiveWalkStringMaker(sindex, depth+1, K);
+                walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
+                constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
             }
-            
             walkString+= suf(unitigString, Kpass);
-            
-            
             
             while(!stType12.empty()){
                 int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
@@ -1817,16 +1964,10 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
                 }
                 
                 stType12.pop();
-                if(isSmallK=='y'){
-                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                }else{
-                    recursiveWalkStringMaker(sindex, depth+1, K);
-                    walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                    
-                }
+                recursiveWalkStringMaker(sindex, depth+1, K);
+                walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
             }
         }
-        
         
         //not walk starting AND not absorbed
         if(!isItWalkStarting(uid) && absorbedCategory[uid]=='0' && MODE_ABSORPTION_NOTIP){
@@ -1840,18 +1981,11 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
                 }
                 stType34.pop();
                 
-                if(isSmallK=='y'){
-                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                }else{
-                    assert(sindex<adjList.size());
-                    recursiveWalkStringMaker(sindex, depth+1, K);
-                    walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                }
+                assert(sindex<adjList.size());
+                recursiveWalkStringMaker(sindex, depth+1, K);
+                walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
             }
-            
             walkString+= cutPref(unitigString, Kpass);
-            
-            
             
             while(!stType12.empty()){
                 int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
@@ -1863,12 +1997,8 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
                 }
                 
                 stType12.pop();
-                if(isSmallK=='y'){
-                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                }else{
-                    recursiveWalkStringMaker(sindex, depth+1, K);
-                    walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                }
+                recursiveWalkStringMaker(sindex, depth+1, K);
+                walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
             }
         }
         
@@ -1878,58 +2008,18 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
         //        }
         
         //ERROR ONE
-        
         if(isItWalkStarting(uid) && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
-            // assert(stType34.empty());
-            //           assert(stType12.empty());
-            //if(absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
+
             isThisAbsorbedWalk=true;
             walkAbsorbedCategory =absorbedCategory[uid];
             
             if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
                 walkString+=cutSuf(unitigString, Kpass);
-                
-                //                string A = pref(walkString, Kpass);
-                //                string B = cutPref(walkString, Kpass);
-                //                walkString = A;
-                //                while(!stType34.empty()){
-                //                    int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-                //                    char isSmallK =stType34.top().isSmallK;
-                //
-                //                    if(isItAPrintedWalk[oldToNew[stType34.top().toNode].finalWalkId]==true){
-                //                        stType34.pop();
-                //                        continue;
-                //                    }
-                //                    stType34.pop();
-                //
-                //                    if(isSmallK=='y'){
-                //                        //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                //                    }else{
-                //                        walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, K);
-                //                    }
-                //                }
-                //                walkString += B;
-                
             }
             if(!ABSORBONLYTWO){
                 if(absorbedCategory[uid]=='1') walkString+="+";
                 else if(absorbedCategory[uid]=='4') walkString+="-";
             }
-            
-            //            if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
-            //                while(!stType34.empty()){
-            //                    int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-            //                    char isSmallK =stType34.top().isSmallK;
-            //                    stType34.pop();
-            //
-            //                    if(isSmallK=='y'){
-            //                        //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-            //                    }else{
-            //                        walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, K);
-            //                    }
-            //                }
-            //            }
-            
             
             if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
                 walkString+= cutPref(unitigString, Kpass);
@@ -1944,27 +2034,11 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
                     }
                     
                     stType12.pop();
-                    
-                    if(isSmallK=='y'){
-                        //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                    }else{
-                        recursiveWalkStringMaker(sindex, depth+1, K);
-                        walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                    }
+                    recursiveWalkStringMaker(sindex, depth+1, K);
+                    walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
                 }
             }
-            
-            //            while(!stType12.empty()){
-            //                int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-            //                char isSmallK =stType12.top().isSmallK;
-            //                stType12.pop();
-            //
-            //                if(isSmallK=='y'){
-            //                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-            //                }else{
-            //                    walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, K);
-            //                }
-            //            }
+
             if(!ABSORBONLYTWO){
                 if(absorbedCategory[uid]=='3') walkString+="+";
                 else if(absorbedCategory[uid]=='2') walkString+="-";
@@ -1978,13 +2052,8 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
                         continue;
                     }
                     stType12.pop();
-                    
-                    if(isSmallK=='y'){
-                        //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                    }else{
-                        recursiveWalkStringMaker(sindex, depth+1, K);
-                        walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
-                    }
+                    recursiveWalkStringMaker(sindex, depth+1, K);
+                    walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
                 }
             }
         }
@@ -2004,9 +2073,7 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
                 walkString = cutSuf(walkString, Kpass) + signs + cutPref(unitigString, Kpass);
             }
             
-            
             if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3' ){
-                
                 //if(!ABSORBONLYTWO){
                 string signs;
                 if(absorbedCategory[uid]=='3') signs="+";
@@ -2014,11 +2081,8 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
                 walkString = cutSuf(walkString, Kpass) + unitigString;
                 walkString = cutSuf(walkString, Kpass) + signs;
                 // }
-                
-                
             }
         }
-        
         
         if( MODE_ABSORPTION_TIP && isTip == 0){//
             //walkString+= cutPref(unitigString, K);
@@ -2085,12 +2149,334 @@ void AbsorbGraph::recursiveWalkStringMaker(int startWalkIndex, int depth, int Kp
     }else{
         if(isThisAbsorbedWalk) walkString="["+walkString+"]";
     }
-    
-    
+
     constructedStrings[get<1>(sorter[startWalkIndex])] = walkString;
 }
 
 
+
+void AbsorbGraph::recursiveWalkStringMakerOld(int startWalkIndex, int depth, int Kpass, ofstream &FOUT){
+    //iterWalkStringMaker(startWalkIndex, depth, Kpass);
+    //return;
+    
+    //recursivePrinter(startWalkIndex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth, K);
+    //return "";
+    //return iterWalkStringMaker(startWalkIndex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth, Kpass);
+    
+    segfaultfile<<startWalkIndex<<endl;
+    assert(startWalkIndex<adjList.size());
+    if(isItAPrintedWalk[get<1>(sorter[startWalkIndex])]) return;
+    //cout<<depth<<endl;
+    bool isThisAbsorbedWalk = false;;
+    char walkAbsorbedCategory = '0';
+    string unitigString = "";
+    
+    
+    //string& walkString = constructedStrings[get<1>(sorter[startWalkIndex])];
+    
+    while(true){
+        assert(startWalkIndex<sorter.size());
+        MyTypes::fourtuple &n = sorter[startWalkIndex];
+        int finalWalkId = get<1>(n);
+        
+        //depthfile<<get<0>(n)<<" "<<depth<<endl;
+        
+        //@ABSORB
+        if( MODE_ABSORPTION_NOTIP ){
+            if (isItAPrintedWalk[finalWalkId]) return;
+        }
+        
+        int uid = get<0>(n);
+        int isTip = get<3>(n);
+        //cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
+        
+        if(nodeSign[uid] == false){
+            unitigString =  reverseComplement(unitigs.at(uid).sequence);
+        }else{
+            unitigString =  (unitigs.at(uid).sequence);
+        }
+        
+        stack<edge_t> stType12;
+        stack<edge_t> stType34;
+        if(absorbGraphCycleRemoved[uid].size() > 0){         //populate two types of stacks
+            stack<edge_t> & st = absorbGraphCycleRemoved[uid];
+            while(!st.empty()){
+                edge_t st_top = st.top();
+                assert(isItAPrintedWalk[oldToNew[st_top.toNode].finalWalkId]==false);
+                if(absorbedCategory[st_top.toNode]=='3' or absorbedCategory[st_top.toNode]=='4'  ){
+                    stType34.push(st_top);
+                }else if(absorbedCategory[st_top.toNode]=='1' or absorbedCategory[st_top.toNode]=='2' ){
+                    stType12.push(st_top);
+                }else{
+                    cout<<"errorrrrrrrrrrr"<<endl;
+                    assert(false);
+                }
+                st.pop();
+            }
+        }
+        
+        //walk starting AND not absorbed
+        if( isItWalkStarting(uid) && absorbedCategory[uid]=='0' && MODE_ABSORPTION_NOTIP){
+            //walkString+= cutSuf(unitigString, Kpass);
+            FOUT<<cutSuf(unitigString, Kpass);
+            
+            while(!stType34.empty()){
+                int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
+                char isSmallK =stType34.top().isSmallK;
+                
+                if(isItAPrintedWalk[oldToNew[stType34.top().toNode].finalWalkId]==true){
+                    stType34.pop();
+                    continue;
+                }
+                
+                stType34.pop();
+                
+                FOUT<<"[";
+                recursiveWalkStringMakerOld(sindex, depth+1, K, FOUT);
+                FOUT<<"]";
+                //walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
+                //constructedStrings[get<1>(sorter[sindex])].shrink_to_fit();
+            }
+            
+            //walkString+= suf(unitigString, Kpass);
+            FOUT<<suf(unitigString, Kpass);
+            
+            while(!stType12.empty()){
+                int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
+                char isSmallK =stType12.top().isSmallK;
+                if(isItAPrintedWalk[oldToNew[stType12.top().toNode].finalWalkId]==true){
+                    stType12.pop();
+                    continue;
+                }
+                
+                stType12.pop();
+                
+                FOUT<<"[";
+                recursiveWalkStringMakerOld(sindex, depth+1, K, FOUT);
+                FOUT<<"]";
+            
+                //walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
+            }
+        }
+        
+        //not walk starting AND not absorbed
+        if(!isItWalkStarting(uid) && absorbedCategory[uid]=='0' && MODE_ABSORPTION_NOTIP){
+            while(!stType34.empty()){
+                int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
+                char isSmallK =stType34.top().isSmallK;
+                
+                if(isItAPrintedWalk[oldToNew[stType34.top().toNode].finalWalkId]==true){
+                    stType34.pop();
+                    continue;
+                }
+                stType34.pop();
+                
+                assert(sindex<adjList.size());
+                
+                FOUT<<"[";
+                recursiveWalkStringMakerOld(sindex, depth+1, K, FOUT);
+                FOUT<<"]";
+                //recursiveWalkStringMaker(sindex, depth+1, K);
+                //walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
+            }
+            //walkString+= cutPref(unitigString, Kpass);
+            FOUT<<cutPref(unitigString, Kpass);
+            
+            while(!stType12.empty()){
+                int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
+                
+                char isSmallK =stType12.top().isSmallK;
+                if(isItAPrintedWalk[oldToNew[stType12.top().toNode].finalWalkId]==true){
+                    stType12.pop();
+                    continue;
+                }
+                
+                stType12.pop();
+                
+                FOUT<<"[";
+                recursiveWalkStringMakerOld(sindex, depth+1, K, FOUT);
+                FOUT<<"]";
+                //recursiveWalkStringMaker(sindex, depth+1, K);
+                //walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
+            }
+        }
+        
+        //not walk starting AND absorbed
+        //        if(pos_in_walk != 1 && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
+        //            assert(false);
+        //        }
+        
+        //ERROR ONE
+        if(isItWalkStarting(uid) && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
+
+            isThisAbsorbedWalk=true;
+            walkAbsorbedCategory =absorbedCategory[uid];
+            
+            if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
+                //walkString+=cutSuf(unitigString, Kpass);
+                FOUT<<cutSuf(unitigString, Kpass);
+                
+            }
+            if(!ABSORBONLYTWO){
+                if(absorbedCategory[uid]=='1') {
+                    //walkString+="+";
+                    FOUT<<"+";
+                }
+                else if(absorbedCategory[uid]=='4'){
+                    //walkString+="-";
+                    FOUT<<"-";
+                }
+            }
+            
+            if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
+                FOUT<<cutPref(unitigString, Kpass);
+                //walkString+= cutPref(unitigString, Kpass);
+                while(!stType12.empty()){
+                    //assert(isItAPrintedWalk[oldToNew[stType12.top().toNode].finalWalkId] == false);
+                    int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
+                    char isSmallK =stType12.top().isSmallK;
+                    
+                    if(isItAPrintedWalk[oldToNew[stType12.top().toNode].finalWalkId]==true){
+                        stType12.pop();
+                        continue;
+                    }
+                    
+                    stType12.pop();
+                    
+                    FOUT<<"[";
+                    recursiveWalkStringMakerOld(sindex, depth+1, K, FOUT);
+                    FOUT<<"]";
+                    //recursiveWalkStringMaker(sindex, depth+1, K);
+                    //walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
+                }
+            }
+
+            if(!ABSORBONLYTWO){
+                if(absorbedCategory[uid]=='3') {
+                    FOUT<<"+";
+                    //walkString+="+";
+                }else if(absorbedCategory[uid]=='2'){
+                    FOUT<<"-";
+                    //walkString+="-";
+                }
+                
+                while(!stType12.empty()){
+                    int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
+                    char isSmallK =stType12.top().isSmallK;
+                    
+                    if(isItAPrintedWalk[oldToNew[stType12.top().toNode].finalWalkId]==true){
+                        stType12.pop();
+                        continue;
+                    }
+                    stType12.pop();
+                    
+                    FOUT<<"[";
+                    recursiveWalkStringMakerOld(sindex, depth+1, K, FOUT);
+                    FOUT<<"]";
+                    //recursiveWalkStringMaker(sindex, depth+1, K);
+                    //walkString = walkString + constructedStrings[get<1>(sorter[sindex])];
+                }
+            }
+        }
+        
+        //earlyAbsorb
+        /*
+        if(!isItWalkStarting(uid) && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
+            isThisAbsorbedWalk=true;
+            walkAbsorbedCategory =absorbedCategory[uid];
+            assert(stType34.empty());
+            assert(stType12.empty());
+            
+            if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
+                string signs;
+                if(absorbedCategory[uid]=='1') signs="+";
+                else if(absorbedCategory[uid]=='4') signs="-";
+                
+                walkString = cutSuf(walkString, Kpass) + signs + cutPref(unitigString, Kpass);
+            }
+            
+            if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3' ){
+                //if(!ABSORBONLYTWO){
+                string signs;
+                if(absorbedCategory[uid]=='3') signs="+";
+                else if(absorbedCategory[uid]=='2') signs="-";
+                walkString = cutSuf(walkString, Kpass) + unitigString;
+                walkString = cutSuf(walkString, Kpass) + signs;
+                // }
+            }
+        }
+         
+        
+       
+        if( MODE_ABSORPTION_TIP && isTip == 0){//
+            //walkString+= cutPref(unitigString, K);
+            walkString = plus_strings(walkString, unitigString, K);
+            
+        }else if(isTip==1 && MODE_ABSORPTION_TIP){ //right R   R    ]   ]   ]   ]
+            //cut prefix: correct
+            if(0==0){
+                unitigString = unitigString.substr(K - 1, unitigString.length() - (K - 1));
+                if(walkString.length()<K){
+                    cout<<"pos: "<<walkString.length()<<endl;
+                }
+                walkString += "(" + unitigString + ")";
+            }
+            if(1==0){
+                tipFile<<">pref\n"<<unitigString<<endl;
+            }
+            
+        }else if(isTip==2 && MODE_ABSORPTION_TIP){ //left L   L    [ [ [
+            //cut suffix: correct
+            if(0==0){
+                unitigString = unitigString.substr(0, unitigString.length() - (K - 1));
+                if(walkString.length()<K){
+                    cout<<"pos: "<<walkString.length()<<endl;
+                }
+                walkString += "{" + unitigString + "}";
+            }
+            if(1==0){
+                tipFile<<">suf\n"<<unitigString<<endl;
+            }
+        }
+        */
+        
+        if(startWalkIndex+1 == sorter.size()) {
+            //print previous walk
+            // tipDebugFile<<">"<<finalWalkId << " " << uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
+            // V_tip_ustitch++;
+            // C_tip_ustitch+=walkString.length();
+            //
+            //  tipDebugFile<<walkString<<endl;
+            //  tipFile<< walkString<<endl;
+            
+            if(MODE_ABSORPTION_NOTIP){
+                isItAPrintedWalk[finalWalkId] = true;
+            }
+            
+            break;
+        }else if(get<1>(sorter[startWalkIndex+1]) != finalWalkId){
+            //print previous walk
+            //  tipDebugFile<<">"<<finalWalkId << " " << uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
+            //           V_tip_ustitch++;
+            //            C_tip_ustitch+=walkString.length();
+            //
+            //   tipDebugFile<<walkString<<endl;
+            //           tipFile<< walkString<<endl;
+            
+            isItAPrintedWalk[finalWalkId] = true;
+            break;
+        }
+        startWalkIndex++;
+    }
+//    if(ABSORBONLYTWO){
+//        if(walkAbsorbedCategory=='1') walkString="["+walkString+"]";
+//        else if(walkAbsorbedCategory=='4') walkString="("+walkString+")";
+//    }else{
+//        if(isThisAbsorbedWalk) walkString="["+walkString+"]";
+//    }
+
+    //constructedStrings[get<1>(sorter[startWalkIndex])] = walkString;
+}
 
 
 
@@ -2125,19 +2511,32 @@ void AbsorbGraph::tipAbsorbedOutputter(){
         
         
         orderOfUnitigs.pop();
+        int strsize=0;
+        //int strsize = reservedStringSize.front();
+        //reservedStringSize.pop();
+        
         depth = 0;
         //recursivePrinter(it, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth, K);
+        
+        bool RECUROLD = false;
+        bool RECURLOW2 = false;
+        bool ITERDISK = false;
+        
         string walkString = "";
         
-        //walkString = recursiveWalkStringMakerOld(it, depth, K);
+        if(RECUROLD){
+            //walkString = recursiveWalkStringMakerOld(it, depth, K, tipFile);
+        }else if(RECURLOW2){
+            tipFile<< ">\n";
+            recursiveWalkStringMakerOld(it, depth, K, tipFile);
+            tipFile<< "\n";
+        }else if(ITERDISK){
+            walkString = readAndDeleteWalkFile(get<1>(sorter[it]));
+        }else{
+            iterSpellTested(it, depth, K, color, 0);
+            walkString = constructedStrings[get<1>(sorter[it])];
+        }
         
-        //iterWalkStringMaker(it, depth, K, color);
-        //walkString = constructedStrings[get<1>(sorter[it])];
-        
-        iterWalkStringMakerCopy(it, depth, K, color);
-        walkString = constructedStrings[get<1>(sorter[it])];
-        
-        //tipDebugFile<<">"<<finalWalkId << " " << uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
         
         if(walkString!="" && MODE_ABSORPTION_NOTIP){
             V_tip_ustitch++;
@@ -2157,11 +2556,12 @@ void AbsorbGraph::tipAbsorbedOutputter(){
             C_oneabsorb_ACGT +=walkString.length() -brackets1- brackets2 -stringPlus-stringMinus;
             C_oneabsorb_plusminus += stringPlus +stringMinus;
             C_oneabsorb_brackets +=brackets1+brackets2;
+            
+            walkString = "";
+            walkString.shrink_to_fit();
         }
     }
-    
-    //exit(1);
-    
+
     int it = -1;
     while(true){
         if(orderOfUnitigs.empty()){
@@ -2169,22 +2569,22 @@ void AbsorbGraph::tipAbsorbedOutputter(){
             if(it>=sorter.size()) break;
         }else{
             assert(false);
-            //n = sorter[sorterIndexMap[orderOfUnitigs.front()]];
             it = sorterIndexMap[orderOfUnitigs.front()];
             orderOfUnitigs.pop();
         }
-        break;
+        if(MODE_ABSORPTION_NOTIP)
+            break;
+        
         //recursive call
         depth = 0;
         string walkString="";
-        iterWalkStringMaker(it, depth, K, color);
-        walkString = constructedStrings[get<1>(sorter[it])];
         
-        
-        //recursiveWalkStringMaker(it,  depth, K);
-        //walkString = walkString + constructedStrings[get<1>(sorter[it])];
-        
-        
+        if(MODE_ABSORPTION_TIP){
+            //walkString = recursiveWalkStringMakerOld(it, depth, K, tipFile);
+        }else{
+            assert(false);
+        }
+
         //tipDebugFile<<">"<<finalWalkId << " " << uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
         
         if(walkString!=""){
@@ -2195,7 +2595,6 @@ void AbsorbGraph::tipAbsorbedOutputter(){
             tipFile<<">\n"<< walkString<<endl;
             
             C_oneabsorb+=walkString.length();
-            
             
             
             int brackets1 = std::count(walkString.begin(), walkString.end(), '[');
@@ -2314,405 +2713,43 @@ void absorptionManager(vector<MyTypes::fourtuple>& sorter) {
         }
     }
     
+    
     AbsorbGraph abs(sorter); //initialize all the graphs and other data structures
     
-    if(MODE_ABSORPTION_NOTIP){
-        abs.sorterIndexAndAbsorbGraphMaker();//sorter, sorterIndexMap, absorbGraph, absorbedCategory
-    }
-    
-    if(DBGFLAG==PRINTER){
-        abs.print_absorb_graph();
-    }
-    
-    //makeGraphDotAbsorb(absorbGraph);
     
     if(MODE_ABSORPTION_NOTIP ){
+
+        
+        if(MODE_ABSORPTION_NOTIP){
+            abs.sorterIndexAndAbsorbGraphMaker();//sorter, sorterIndexMap, absorbGraph, absorbedCategory
+        }
+        
+        //makeGraphDotAbsorb(absorbGraph);
+        
+        if(DBGFLAG==PRINTER){
+            abs.print_absorb_graph();
+        }
+        
         abs.removeCycleFromAbsorbGraph();//sorter,  sorterIndexMap, absorbGraph, absorbGraphCycleRemoved,  orderOfUnitigs,  absorbedCategory, last two are output
         cout<<"[3.3] cycle removed from ab graph!"<<endl;
-    }
-    
-    if(DBGFLAG==PRINTER){
-        for (int i=0; i<adjList.size(); i++) {
-            cout<<i<<"->"<<abs.absorbedCategory[i]<<endl;
-        }
-        //print_absorb_graph_acyclic(absorbGraphCycleRemoved);
-    }
-    
-    abs.tipAbsorbedOutputter(); //sorter, sorterIndexMap, absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory
-    cout<<"[3.4] tip outputter done!"<<endl;
-    
-}
-
-string AbsorbGraph::recursiveWalkStringMakerOld(int startWalkIndex, int depth, int Kpass){
-
-    
-    
-    bool isThisAbsorbedWalk = false;;
-    char walkAbsorbedCategory = '0';
-    string unitigString;
-    string walkString = "";
-    
-    int prevWalkId=-1;
-    //int SMALLK = 20;
-    
-    while(true){
-        assert(startWalkIndex<sorter.size());
-        MyTypes::fourtuple n = sorter[startWalkIndex];
-        int finalWalkId = get<1>(n);
-        
-        //depthfile<<get<0>(n)<<" "<<depth<<endl;
-        
-       //@ABSORB
-        if( MODE_ABSORPTION_NOTIP ){
-            if (isItAPrintedWalk[finalWalkId]) return "";
-        }
-        
-      
-       int uid = get<0>(n);
-       int pos_in_walk = get<2>(n);
-       int isTip = get<3>(n);
-       //cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
-        
-        
-        //ALLABSORBING
-//        bool isNextNeighborAbsorbed14 = false;
-//        int neighborUid = -1;
-//        if(startWalkIndex+1<sorter.size()){
-//            neighborUid = get<0>(sorter[startWalkIndex+1]);
-//            if(ALLABSORBING){
-//                isNextNeighborAbsorbed14 = (absorbedCategory[neighborUid] == '4' or absorbedCategory[neighborUid] == '1');
-//            }
-//        }else{
-//
-//        }
-        
-        
-        
-        if(nodeSign[uid] == false){
-            unitigString =  reverseComplement(unitigs.at(uid).sequence);
-        }else{
-            unitigString =  (unitigs.at(uid).sequence);
-        }
-        
-        stack<edge_t> stType12;
-        stack<edge_t> stType34;
-        if(absorbGraphCycleRemoved.count(uid) > 0){         /*populate two types of stacks*/
-            stack<edge_t> st = absorbGraphCycleRemoved[uid];
-            while(!st.empty()){
-                edge_t st_top = st.top();
-                if(absorbedCategory[st_top.toNode]=='3' or absorbedCategory[st_top.toNode]=='4'  ){
-                    stType34.push(st_top);
-                }else if(absorbedCategory[st_top.toNode]=='1' or absorbedCategory[st_top.toNode]=='2' ){
-                    stType12.push(st_top);
-                }else{
-                    cout<<"errorrrrrrrrrrr"<<endl;
-                    assert(false);
-                }
-                st.pop();
-            }
-        }
-       
-        
-        //walk starting AND not absorbed
-        if( isItWalkStarting(uid) && absorbedCategory[uid]=='0' && MODE_ABSORPTION_NOTIP){
-            walkString+= cutSuf(unitigString, Kpass);
-
-            while(!stType34.empty()){
-                int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-                char isSmallK =stType34.top().isSmallK;
-                stType34.pop();
-                
-                if(isSmallK=='y'){
-                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                }else{
-                    walkString+= recursiveWalkStringMakerOld(sindex, depth+1, K);
-                }
-                
-            }
-            
-            walkString+= suf(unitigString, Kpass);
+        if(DBGFLAG==PRINTER){
+               for (int i=0; i<adjList.size(); i++) {
+                   cout<<i<<"->"<<abs.absorbedCategory[i]<<endl;
+               }
+               //print_absorb_graph_acyclic(absorbGraphCycleRemoved);
+           }
            
-            
-            
-            while(!stType12.empty()){
-                int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-                char isSmallK =stType12.top().isSmallK;
-                stType12.pop();
-                if(isSmallK=='y'){
-                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                }else{
-                    walkString+= recursiveWalkStringMakerOld(sindex, depth+1, K);
-                }
-            }
-        }
-        
-        
-        //not walk starting AND not absorbed
-        if(!isItWalkStarting(uid) && absorbedCategory[uid]=='0' && MODE_ABSORPTION_NOTIP){
-            while(!stType34.empty()){
-                int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-                char isSmallK =stType34.top().isSmallK;
-                stType34.pop();
-                
-                if(isSmallK=='y'){
-                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                }else{
-                    walkString+= recursiveWalkStringMakerOld(sindex, depth+1, K);
-                }
-            }
-            
-            walkString+= cutPref(unitigString, Kpass);
-            
-            
-            
-            while(!stType12.empty()){
-                int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-                char isSmallK =stType12.top().isSmallK;
-                stType12.pop();
-                if(isSmallK=='y'){
-                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                }else{
-                    walkString+= recursiveWalkStringMakerOld(sindex, depth+1, K);
-                }
-            }
-        }
-        
-        //not walk starting AND absorbed
-//        if(pos_in_walk != 1 && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
-//            assert(false);
-//        }
-        
-        //ERROR ONE
-        
-        if(isItWalkStarting( uid) && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
-        //if(absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
-            isThisAbsorbedWalk=true;
-            walkAbsorbedCategory =absorbedCategory[uid];
-            
-            if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
-                walkString+=cutSuf(unitigString, Kpass);
-                
-            }
-            if(!ABSORBONLYTWO){
-                if(absorbedCategory[uid]=='1') walkString+="+";
-                else if(absorbedCategory[uid]=='4') walkString+="-";
-            }
-            
-//            while(!stType34.empty()){
-//                int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-//                char isSmallK =stType34.top().isSmallK;
-//                stType34.pop();
-//
-//                if(isSmallK=='y'){
-//                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-//                }else{
-//                    walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, K);
-//                }
-//            }
-            
-            if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
-                walkString+= cutPref(unitigString, Kpass);
-                while(!stType12.empty()){
-                                int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-                                char isSmallK =stType12.top().isSmallK;
-                                stType12.pop();
-                
-                                if(isSmallK=='y'){
-                                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                                }else{
-                                    walkString+= recursiveWalkStringMakerOld(sindex, depth+1, K);
-                                }
-                            }
-            }
-            
-//            while(!stType12.empty()){
-//                int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-//                char isSmallK =stType12.top().isSmallK;
-//                stType12.pop();
-//
-//                if(isSmallK=='y'){
-//                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-//                }else{
-//                    walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, K);
-//                }
-//            }
-            if(!ABSORBONLYTWO){
-                if(absorbedCategory[uid]=='3') walkString+="+";
-                else if(absorbedCategory[uid]=='2') walkString+="-";
-                
-                while(!stType12.empty()){
-                                int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-                                char isSmallK =stType12.top().isSmallK;
-                                stType12.pop();
-                
-                                if(isSmallK=='y'){
-                                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                                }else{
-                                    walkString+= recursiveWalkStringMakerOld(sindex,depth+1, K);
-                                }
-                            }
-            }
-        }
-
-        if(!isItWalkStarting(uid) && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
-        //if(absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
-            isThisAbsorbedWalk=true;
-            walkAbsorbedCategory = absorbedCategory[uid];
-            string part1="";
-            string part2="";
-            if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
-                int indexFromLast;
-                walkString+=cutSuf(walkString, Kpass);
-                //assert(false);
-               // walkString+=cutSuf(walkString, Kpass);
-                //cout<<suf(walkString, Kpass)<<endl;
-                //walkString=cutSuf(walkString, Kpass)+cutSuf(unitigString, Kpass);
-                //cout<<walkString<<endl;
-                
-                
-//                int cntACGT=0;
-//                string part3= "";
-//                string sufK1 = "";
-//                stack<char> checkStack;
-//                for(indexFromLast=walkString.length()-1; indexFromLast >= 0;  ){
-//                    if(walkString[indexFromLast]=='A' || walkString[indexFromLast]=='C' || walkString[indexFromLast]=='G' || walkString[indexFromLast]=='T'){
-//                        cntACGT++;
-//                        sufK1=walkString[indexFromLast--]+sufK1;
-//                        if(cntACGT==Kpass) break;
-//                    }else{
-//                        while(1){
-//                            part3=walkString[indexFromLast]+part3;
-//                            if(walkString[indexFromLast]==']'){
-//                                checkStack.push(']');
-//                            }else if(walkString[indexFromLast]=='[' and !checkStack.empty()){
-//                                checkStack.pop();
-//                            }
-//                            indexFromLast--;
-//                            if(checkStack.empty()){
-//                                break;
-//                            }
-//                        }
-//
-//                    }
-//                }
-//                 part1= walkString.substr(0, indexFromLast+1);
-//                 part2= walkString.substr(indexFromLast+1, walkString.length()-indexFromLast);
-//                cout<<walkString<<endl;
-//                cout<<part1<<endl;
-//                cout<<part2<<endl;
-//                cout<<endl;
-//                walkString = part1;
-                
-                
-            }
-            if(!ABSORBONLYTWO){
-                if(absorbedCategory[uid]=='1') walkString=cutSuf(walkString, Kpass)+"+";
-                else if(absorbedCategory[uid]=='4') walkString=cutSuf(walkString, Kpass)+"-";
-            }
-            //walkString = walkString + cutSuf(part2, Kpass);
-            while(!stType34.empty()){
-                int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
-                char isSmallK =stType34.top().isSmallK;
-                stType34.pop();
-                
-                if(isSmallK=='y'){
-                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                }else{
-                    walkString+= recursiveWalkStringMakerOld(sindex, depth+1, K);
-                }
-            }
-            
-            if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
-                walkString+= cutPref(unitigString, Kpass);
-            }
-            
-            while(!stType12.empty()){
-                int sindex = sorterIndexMap[oldToNew[stType12.top().toNode].finalWalkId];
-                char isSmallK =stType12.top().isSmallK;
-                stType12.pop();
-                
-                if(isSmallK=='y'){
-                    //walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory, depth+1, SMALLK);
-                }else{
-                    walkString+= recursiveWalkStringMakerOld(sindex, depth+1, K);
-                }
-            }
-            if(!ABSORBONLYTWO){
-                if(absorbedCategory[uid]=='3') walkString+="+";
-                else if(absorbedCategory[uid]=='2') walkString+="-";
-            }
-        }
-    
-        
-        if( MODE_ABSORPTION_TIP && isTip == 0){//
-            //walkString+= cutPref(unitigString, K);
-            walkString = plus_strings(walkString, unitigString, K);
-            
-        }else if(isTip==1 && MODE_ABSORPTION_TIP){ //right R   R    ]   ]   ]   ]
-            //cut prefix: correct
-            if(0==0){
-                unitigString = unitigString.substr(K - 1, unitigString.length() - (K - 1));
-                if(walkString.length()<K){
-                    cout<<"pos: "<<walkString.length()<<endl;
-                }
-                walkString += "(" + unitigString + ")";
-            }
-            if(1==0){
-                tipFile<<">pref\n"<<unitigString<<endl;
-            }
-            
-        }else if(isTip==2 && MODE_ABSORPTION_TIP){ //left L   L    [ [ [
-            //cut suffix: correct
-            if(0==0){
-                unitigString = unitigString.substr(0, unitigString.length() - (K - 1));
-                if(walkString.length()<K){
-                    cout<<"pos: "<<walkString.length()<<endl;
-                }
-                walkString += "{" + unitigString + "}";
-            }
-            if(1==0){
-                tipFile<<">suf\n"<<unitigString<<endl;
-            }
-        }
-            
-        if(startWalkIndex+1 == sorter.size()) {
-            //print previous walk
-            tipDebugFile<<">"<<finalWalkId << " " << uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
-            // V_tip_ustitch++;
-           // C_tip_ustitch+=walkString.length();
-//
-            tipDebugFile<<walkString<<endl;
-          //  tipFile<< walkString<<endl;
-            
-            if(MODE_ABSORPTION_NOTIP){
-                isItAPrintedWalk[finalWalkId] = true;
-            }
-            
-            break;
-        }else if(get<1>(sorter[startWalkIndex+1]) != finalWalkId){
-                        //print previous walk
-                        tipDebugFile<<">"<<finalWalkId << " " << uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
-            //           V_tip_ustitch++;
-            //            C_tip_ustitch+=walkString.length();
-            //
-                        tipDebugFile<<walkString<<endl;
-             //           tipFile<< walkString<<endl;
-                        
-                        isItAPrintedWalk[finalWalkId] = true;
-                        break;
-        }
-        startWalkIndex++;
-    }
-    if(ABSORBONLYTWO){
-        if(walkAbsorbedCategory=='1') walkString="["+walkString+"]";
-        else if(walkAbsorbedCategory=='4') walkString="("+walkString+")";
-    }else{
-        if(isThisAbsorbedWalk) walkString="["+walkString+"]";
+           abs.tipAbsorbedOutputter(); //sorter, sorterIndexMap, absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory
+           cout<<"[3.4] tip outputter done!"<<endl;
+           
     }
     
-    return walkString;
+   
+    if(MODE_ABSORPTION_TIP ){
+        abs.tipSpell();
+    }
+    
 }
-
 
 
 

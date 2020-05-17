@@ -18,6 +18,7 @@ bool BOTHTIPABSORB_V2 = false;
 bool ABSORBONLYTWO = false;
 bool SCCORDER = true;
 int C_abs_calc = 0;
+int ncc = 0;
 
 
 bool NAIVEVARI = false;
@@ -110,7 +111,8 @@ enum ALGOMODE_T
     TIPANDAB = 18,
     TIPANDAB_TIPLATER = 19,
     PROFILE_ONLY_ABS = 20,
-    SCC_ABS=21
+    SCC_ABS=21,
+    ESS=22,PROFILE_ONLY_ESS=23
 };
 
 bool FLG_NEWUB = true;
@@ -125,13 +127,13 @@ bool MODE_ABSORPTION_NOTIP = (ALGOMODE == ONEWAYABSORPTION || ALGOMODE == ONEWAY
 //string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "twoway", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "tip", "one_way_absorption", "one_way_absorption_not_tested", "tip_and_ab", "tip_and_ab_tip_later"
 //};
 
-string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "", "", "", "", "", "", ""};
-string modename[] = {"Fwd", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "tip", "one_absorption", "one_way_absorption_not_tested", "tip_and_ab", "tip_and_ab_tip_later", "profile_only_abs", "scc_abs"};
+string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "", "", "", "", "", "", "", ""};
+string modename[] = {"Fwd", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "tip", "one_absorption", "one_way_absorption_not_tested", "tip_and_ab", "tip_and_ab_tip_later", "profile_only_abs", "scc_abs", "ess", "profile_only_ess"};
 
 /*
  FILENAMES
  */
-string ofileTipOutput = "tipOutput.txt";
+string ofileTipOutput = "ust_ess_abs.txt";
 string ofileTipDebug = "tipDebug.txt";
 
 namespace MyTypes
@@ -242,6 +244,8 @@ int C_oneabsorb_ACGT = 0;
 int C_oneabsorb_brackets = 0;
 int C_oneabsorb_plusminus = 0;
 int THEDEPTH = 999999;
+
+int C_tip_special=0;
 
 int V_ustitch = 0;
 int V_twoway_ustitch = 0;
