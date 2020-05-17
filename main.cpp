@@ -20,7 +20,7 @@ void setmemlimit()
 
 //        if(MEM_ENV_VAR!=NULL)
 //        {
-                bytes = (512)*(1024*1024);
+                bytes = (60.0)*(1024*1024*1024);
                 memlimit.rlim_cur = bytes;
                 memlimit.rlim_max = bytes;
                 setrlimit(RLIMIT_AS, &memlimit);
@@ -1278,9 +1278,9 @@ void formattedOutputForwardExt(Graph &G){
 
 
 int main(int argc, char** argv) {
-    setmemlimit();
+    //setmemlimit();
     //unsigned int SEED =unsigned ( std::time(0) );
-    unsigned int SEED =1;
+    unsigned int SEED = 1;
     std::srand (  SEED );
     //processEncodedFile();
     //return 0;
@@ -1407,6 +1407,12 @@ int main(int argc, char** argv) {
         double time_a = readTimer();
         G.indegreePopulate();
         
+//        for(int i = 0; i<adjList.size(); i++){
+//            cout<<i<<" in:"<<global_indegree[i]<<" out: "<<global_outdegree[i]<<endl;
+//        }
+//        exit(1);
+        
+        
         cout<<"[COMPLETE][2] TIME for information gather: "<<readTimer() - time_a<<" sec.\n\n";
         
         
@@ -1429,36 +1435,39 @@ int main(int argc, char** argv) {
         
         
         int walkstarting_node_count = ceil((sharedparent_count + sink_count + source_count)/2.0) + isolated_node_count;
+        
+        
+        
         int charLowerbound = C_bcalm-(K-1)*(G.V - walkstarting_node_count*1.0);
         float upperbound = (1-((C_bcalm-(K-1)*(G.V - walkstarting_node_count*1.0))/C_bcalm))*100.0;
         
-        printf( "%d\t\
-               %d\t\
-               %d\t\
-               %d\t\
-               %d\t\
-               %d\t\
-               %.2f\t\
-               %.2f%%\t\
-               %d\t\
-               %d\t\
-               %d\t\
-               %d\t\
-               %.2f%%\t",
-               K,
-               numKmers,
-               V_bcalm,
-               E_bcalm,
-               C_bcalm,
-               charLowerbound,
-               (charLowerbound*2.0)/numKmers,
-               upperbound,
-               isolated_node_count,
-               sink_count,
-               source_count,
-               sharedparent_count,
-               sharedparent_count*100.0/V_bcalm
-               );
+//        printf( "%d\t\
+//               %d\t\
+//               %d\t\
+//               %d\t\
+//               %d\t\
+//               %d\t\
+//               %.2f\t\
+//               %.2f%%\t\
+//               %d\t\
+//               %d\t\
+//               %d\t\
+//               %d\t\
+//               %.2f%%\t",
+//               K,
+//               numKmers,
+//               V_bcalm,
+//               E_bcalm,
+//               C_bcalm,
+//               charLowerbound,
+//               (charLowerbound*2.0)/numKmers,
+//               upperbound,
+//               isolated_node_count,
+//               sink_count,
+//               source_count,
+//               sharedparent_count,
+//               sharedparent_count*100.0/V_bcalm
+//               );
         
         
         globalStatFile << "SEED" <<  "=" << SEED << endl;
@@ -1479,12 +1488,15 @@ int main(int argc, char** argv) {
         globalStatFile << "BITSKMER_LB" <<  "=" << (charLowerbound*2.0)/numKmers << endl;
         globalStatFile << "PERCENT_UB" <<  "=" << upperbound <<  "%" << endl;
         globalStatFile << "PERCENT_N_SPECIAL" <<  "=" << sharedparent_count*100.0/V_bcalm <<"%" << endl;
+        globalStatFile << "WALK_LB" <<  "=" << walkstarting_node_count << endl;
         
         
         for (auto i = inOutCombo.begin(); i != inOutCombo.end(); i++) {
-            printf("%.2f%%\t", (i->second)*100.0/V_bcalm);
+            //printf("%.2f%%\t", (i->second)*100.0/V_bcalm);
             globalStatFile << "PERCENT_DEGREE_"<<(i->first).first << "_" << (i->first).second <<  "=" << (i->second)*100.0/V_bcalm <<"%" << endl;
         }
+        
+        
         printf("%.2f%%\t\
                %.2f%%\t",
                isolated_node_count*100.0/V_bcalm,
@@ -1498,12 +1510,22 @@ int main(int argc, char** argv) {
         //        cout << "(" << i->first.first<< ", "<< i->first.second << ")" << " := " << i->second << '\n';
         //    }
         
-        if(!NAIVEVARI)
-            globalStatFile << "NUM_CC_UNITIG_GRAPH" <<  "=" << pullOutConnectedComponent() << endl;
+        if(!NAIVEVARI){
+            ncc = pullOutConnectedComponent();
+            globalStatFile << "NUM_CC_UNITIG_GRAPH" <<  "=" << ncc << endl;
+        }
+            
+        cout<<"NCC="<< ncc << endl;
+        cout<<"WALK_LB="<<walkstarting_node_count<<endl;
+        cout<<"ESS_CHAR_KMER_LB="<<(charLowerbound-(walkstarting_node_count-ncc)*(K-4)*1.0)/numKmers<<endl;
+        globalStatFile << "ESS_CHAR_KMER_LB" <<(charLowerbound-(walkstarting_node_count-ncc)*(K-4)*1.0)/numKmers<<endl;
         if(ALGOMODE == PROFILE_ONLY){
             globalStatFile.close();
             printf("\n");
             return 0;
+        }
+        if(ALGOMODE == PROFILE_ONLY_ESS){
+            exit(1);
         }
         
         MODE_WALK_UNION = (ALGOMODE == TWOWAYEXT);
@@ -1511,7 +1533,7 @@ int main(int argc, char** argv) {
         MODE_ABSORPTION_NOTIP = (ALGOMODE == ONEWAYABSORPTION || ALGOMODE == ONEWAYABSORPTION_UNTESTED || ALGOMODE == PROFILE_ONLY_ABS);
 
         if (MODE_ABSORPTION_TIP){
-            ofileTipOutput ="onlytipOutput.txt";
+            ofileTipOutput ="ust_ess_tip.txt";
         }
         if(ALGOMODE == TIPANDAB){
             MODE_ABSORPTION_NOTIP = true;
@@ -1528,6 +1550,12 @@ int main(int argc, char** argv) {
              MODE_ABSORPTION_NOTIP = true;
             MODE_ABSORPTION_TIP = false;
             BOTHTIPABSORB_V2 = false;
+        }
+        if (ALGOMODE == ESS)
+        {
+            MODE_ABSORPTION_NOTIP = true;
+            MODE_ABSORPTION_TIP = false;
+            BOTHTIPABSORB_V2 = true;
         }
 
         //pullOutConnectedComponent();
@@ -1565,8 +1593,6 @@ int main(int argc, char** argv) {
             }
         }
         
-        
-        
         double TIME_TOTAL_SEC = readTimer() - startTime;
         
         time_a = readTimer();
@@ -1596,14 +1622,14 @@ int main(int argc, char** argv) {
             int csp = (V_twoway_ustitch-V_oneabsorb)*4;
             C_oneabsorb = C_twoway_ustitch + C_abs_calc;
             C_ustitch = C_oneabsorb;
-             cout<<"c_ust="<<C_twoway_ustitch<<endl;
+            cout<<"c_ust="<<C_twoway_ustitch<<endl;
             cout<<"c_abs_calc="<<C_ustitch<<endl;
             cout<<"c_special_calc="<<csp<<endl;
             cout<<"v_ust="<<V_twoway_ustitch<<endl;
             cout<<"v_abs="<<V_ustitch<<endl;
             cout<<"n_abs="<<(V_twoway_ustitch-V_oneabsorb)<<endl;
-             cout<<"c_per_imp="<<(1.0-(C_ustitch*1.0)/(C_twoway_ustitch*1.0))*100<<"%"<<endl;
-            int ncc=pullOutConnectedComponent();
+            cout<<"c_per_imp="<<(1.0-(C_ustitch*1.0)/(C_twoway_ustitch*1.0))*100<<"%"<<endl;
+            ncc=pullOutConnectedComponent();
             globalStatFile << "NUM_CC_UNITIG_GRAPH" <<  "=" <<  ncc<< endl;
             cout << "n_CC_UNITIG_GRAPH" <<  "=" << ncc << endl;
             
@@ -1612,6 +1638,12 @@ int main(int argc, char** argv) {
             C_oneabsorb_brackets = C_ustitch - csp/2;
         }else{
             int csp = (V_twoway_ustitch-V_oneabsorb)*3;
+            if(MODE_ABSORPTION_TIP){
+                csp = C_tip_special;
+                 cout<<"c_usttip="<<C_tip_ustitch<<endl;
+                
+            }
+            
              cout<<"c_ust="<<C_twoway_ustitch<<endl;
             cout<<"c_abs="<<C_oneabsorb<<endl;
             cout<<"c_special_calc="<<csp<<endl;
@@ -1619,7 +1651,11 @@ int main(int argc, char** argv) {
             cout<<"v_abs="<<V_oneabsorb<<endl;
             cout<<"n_abs="<<(V_twoway_ustitch-V_oneabsorb)<<endl;
             cout<<"c_per_imp="<<(1.0-(C_ustitch*1.0)/(C_twoway_ustitch*1.0))*100<<"%"<<endl;
+            
+            
         }
+        cout<<"WALK_LB="<<walkstarting_node_count<<endl;
+        cout<<"N_CC="<<ncc<<endl;
         
         
         
