@@ -13,11 +13,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: make
-        run: make
      - name: Build project
-        run: |
-        gzip main.out
+        run: make
+        run: gzip main.out
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
