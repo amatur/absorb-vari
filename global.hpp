@@ -20,6 +20,8 @@ bool SCCORDER = true;
 int C_abs_calc = 0;
 int ncc = 0;
 
+bool BENCHMARK=true;
+
 
 bool NAIVEVARI = false;
 
@@ -128,12 +130,12 @@ bool MODE_ABSORPTION_NOTIP = (ALGOMODE == ONEWAYABSORPTION || ALGOMODE == ONEWAY
 //};
 
 string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "", "", "", "", "", "", "", ""};
-string modename[] = {"Fwd", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "tip", "one_absorption", "one_way_absorption_not_tested", "tip_and_ab", "tip_and_ab_tip_later", "profile_only_abs", "scc_abs", "ess", "profile_only_ess"};
+string modename[] = {"Fwd", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "ess-tip-compress", "ess-compress", "one_way_absorption_not_tested", "tip_and_ab", "tip_and_ab_tip_later", "profile_only_abs", "scc_abs", "ess", "profile_only_ess"};
 
 /*
  FILENAMES
  */
-string ofileTipOutput = "ust_ess_abs.txt";
+string ofileTipOutput = "fa.ess";
 string ofileTipDebug = "tipDebug.txt";
 
 namespace MyTypes
@@ -157,8 +159,8 @@ typedef struct
     int serial;
     string sequence;
     int ln;
-    int kc;
-    float km;
+    //int kc;
+    //float km;
 } unitig_struct_t;
 vector<unitig_struct_t> unitigs;
 
@@ -221,12 +223,8 @@ vector<bool> obsoleteWalkId;
 int countNewNode = 0; // number of walks by ust-onewaymerge
 
 map<pair<int, int>, int> inOutCombo;
-vector<deque<edge_t>> adjList;
-vector<vector<edge_t>> reverseAdjList;
-
-map<int, string> newSequences;
-map<int, string> newNewSequences; //int is the unitig id (old id)
-set<int> newNewMarker;
+vector<vector<edge_t>> adjList;
+//vector<vector<edge_t>> reverseAdjList;
 
 vector<list<int>> newToOld;
 vector<int> walkFirstNode;                       //given a walk id, what's the first node of that walk
@@ -288,6 +286,7 @@ string getStdoutFromCommand(string cmd)
 
 void process_mem_usage(double &vm_usage, double &resident_set)
 {
+    return;
     //in KB?
     vm_usage = 0.0;
     resident_set = 0.0;
@@ -433,7 +432,7 @@ int maximumUnitigLength()
     return m;
 }
 
-int read_unitig_file(const string &unitigFileName, vector<unitig_struct_t> &unitigs)
+int read_unitig_file_abs(const string &unitigFileName, vector<unitig_struct_t> &unitigs)
 {
     ifstream unitigFile;
     unitigFile.open(unitigFileName);
@@ -463,7 +462,7 @@ int read_unitig_file(const string &unitigFileName, vector<unitig_struct_t> &unit
         unitig_struct_t unitig_struct;
         edgesline[0] = '\0';
         sscanf(line.c_str(), "%*c %d %s  %s  %s %[^\n]s", &unitig_struct.serial, lnline, kcline, kmline, edgesline);
-
+        //cout<<line<<endl;
         // @@DEBUG
         //        if(unitig_struct.serial == 1241914){
         //            cout<<line<<endl;
@@ -472,13 +471,15 @@ int read_unitig_file(const string &unitigFileName, vector<unitig_struct_t> &unit
         //>0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:-
 
         sscanf(lnline, "%*5c %d", &unitig_struct.ln);
-        sscanf(kcline, "%*5c %d", &unitig_struct.kc);
-        sscanf(kmline, "%*5c %f", &unitig_struct.km);
+        int kc;
+        float km;
+        sscanf(kcline, "%*5c %d", &kc);
+        sscanf(kmline, "%*5c %f", &km);
 
         char c1, c2;
         stringstream ss(edgesline);
 
-        deque<edge_t> edges;
+        vector<edge_t> edges;
         while (getline(ss, line, ' '))
         {
             if (delSpaces(line).length() != 0)
@@ -514,13 +515,20 @@ int read_unitig_file(const string &unitigFileName, vector<unitig_struct_t> &unit
             }
         }
         adjList.push_back(edges);
+        if(ALGOMODE == 15){
+            unitigs.push_back(unitig_struct);
+            unitigFile.ignore ( std::numeric_limits<std::streamsize>::max(), '\n' );
+        }
+
+
 
         doCont = false;
-        while (getline(unitigFile, line))
+        while (1==1 && getline(unitigFile, line))
         {
             if (line.substr(0, 1).compare(">"))
             {
                 unitig_struct.sequence = unitig_struct.sequence + line;
+                //cout<<unitig_struct.sequence<<endl;
 
                 //ADDED VARI
                 if (VARIMODE)
@@ -570,8 +578,11 @@ int read_unitig_file(const string &unitigFileName, vector<unitig_struct_t> &unit
     // variAllStringsFile.close();
 
     cout << "Finished reading input unitig file (bcalm2 file)." << endl;
+    //exit(1);
     return EXIT_SUCCESS;
 }
+
+
 
 // @@ --- ALL PRINTING CODE --- //
 void printBCALMGraph(vector<vector<edge_t>> adjList)
@@ -587,13 +598,13 @@ void printBCALMGraph(vector<vector<edge_t>> adjList)
     }
 }
 
-void printAllBCALMSequences(vector<unitig_struct_t> unitigs)
-{
-    for (unitig_struct_t unitig : unitigs)
-    {
-        cout << unitig.serial << ": " << unitig.ln << " " << unitig.sequence.length() << endl;
-    }
-}
+//void printAllBCALMSequences(vector<unitig_struct_t> unitigs)
+//{
+//    for (unitig_struct_t unitig : unitigs)
+//    {
+//        cout << unitig.serial << ": " << unitig.ln << " " << unitig.sequence.length() << endl;
+//    }
+//}
 
 // might be useful for doing some visualization.
 bool canReachSinkSource(int v, bool visited[], bool sign)
@@ -623,7 +634,7 @@ bool canReachSinkSource(int v, bool visited[], bool sign)
 
     // Recur for all the vertices adjacent
     // to this vertex
-    deque<edge_t>::iterator i;
+    vector<edge_t>::iterator i;
     for (i = adjList[v].begin(); i != adjList[v].end(); ++i)
     {
 
@@ -746,6 +757,12 @@ void pullOutCCDFS(int start, bool *ccVisited, int &count, bool pullit=true)
 
 int pullOutConnectedComponent(bool pullit = false)
 {
+    if(BENCHMARK){
+        return -1;
+    }
+    if(ALGOMODE == 15){
+        return -1;
+    }
     //pullit = false;
     int numCC_bcalm_graph = 0;
     bool *ccVisited = new bool[adjList.size()];
@@ -779,7 +796,7 @@ int pullOutConnectedComponent(bool pullit = false)
                     if (!ccVisited[tonode])
                         stack.push(tonode);
                 }
-                    
+
             }
         }
     }
@@ -814,7 +831,7 @@ int pullOutConnectedComponent(bool pullit = false)
                 break;
         }
     }
-    
+
 
     if (pullit)
     {
@@ -835,7 +852,7 @@ int pullOutConnectedComponent(bool pullit = false)
                 }
             }
             subgraphFile << endl;
-            subgraphFile << unitigs.at(uid).sequence << endl;
+//            subgraphFile << unitigs.at(uid).sequence << endl;
         }
 
         subgraphFile.close();
@@ -847,8 +864,110 @@ int pullOutConnectedComponent(bool pullit = false)
     return numCC_bcalm_graph;
 }
 
+int read_unitig_file(const string& unitigFileName, vector<unitig_struct_t>& unitigs) {
+    ifstream unitigFile;
+    unitigFile.open(unitigFileName);
 
- 
+    string line;
+
+    int nodeNum;
+    char lnline[20];
+    char kcline[20];
+    char kmline[20];
+    char edgesline[100000];
+    bool doCont = false;
+
+    int smallestK = 9999999;
+    getline(unitigFile, line);
+
+    do {
+        unitig_struct_t unitig_struct;
+
+        if(1==1){
+            edgesline[0] = '\0';
+            sscanf(line.c_str(), "%*c %d %s  %s  %s %[^\n]s", &unitig_struct.serial, lnline, kcline, kmline, edgesline);
+
+            if(    line.find("KC") == string::npos){
+                cout<<"Incorrect input format. Try using flag -a 1."<<endl;
+                exit(3);
+            }
+
+            //>0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:-
+            sscanf(lnline, "%*5c %d", &unitig_struct.ln);
+
+
+            if(unitig_struct.ln < smallestK){
+                           smallestK = unitig_struct.ln ;
+                       }
+            if(unitig_struct.ln < K){
+                printf("Wrong k! Try again with correct k value. \n");
+                exit(2);
+            }
+
+        }
+
+
+
+        char c1, c2;
+        stringstream ss(edgesline);
+
+        vector<edge_t> edges;
+        while (getline(ss, line, ' ')) {
+            if (delSpaces(line).length() != 0) {
+                if(DBGFLAG==VERIFYINPUT){
+                    cout<<line<<endl;
+                }
+
+                sscanf(line.c_str(), "%*2c %c %*c %d  %*c  %c", &c1, &nodeNum, &c2); //L:-:0:-
+                edge_t newEdge;
+
+                bool DELSELFLOOP=true;
+                if(DELSELFLOOP){
+                    if((unitig_struct.serial)!= nodeNum){
+                        newEdge.left = charToBool(c1);
+                        newEdge.right = charToBool(c2);
+                        newEdge.toNode = nodeNum;
+                        edges.push_back(newEdge);
+                    }
+                }else{
+                    newEdge.left = charToBool(c1);
+                    newEdge.right = charToBool(c2);
+                    newEdge.toNode = nodeNum;
+                    edges.push_back(newEdge);
+                }
+
+            }
+
+        }
+        adjList.push_back(edges);
+
+
+
+        doCont = false;
+        while (getline(unitigFile, line)) {
+            if (line.substr(0, 1).compare(">")) {
+                //unitig_struct.sequence = unitig_struct.sequence + line;
+                unitigs.push_back(unitig_struct);
+            } else {
+                doCont = true;
+                break;
+            }
+        }
+    } while (doCont);
+
+
+    unitigFile.close();
+
+    if(smallestK > K ){
+        cout<<"\n :::: :::: :::: :::: !!!!!!!!! WARNING !!!!!!!!!!! :::: :::: :::: ::::"<<endl;
+        cout<<"The length of the smallest string we found was " << smallestK << ". Please make sure you are using the correct value of 'k' to ensure correctness of output."<<endl;
+         cout << "------------------------------------------------------"<<endl;
+    }
+
+    //cout << "Complete reading input unitig file (bcalm2 file)." << endl;
+    return EXIT_SUCCESS;
+}
+
 ofstream tipFile;
 ofstream tipDebugFile;
 

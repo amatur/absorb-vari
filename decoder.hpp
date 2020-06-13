@@ -11,7 +11,7 @@
 #define decoder_h
 
 #include <cmath>
-#include<cstring>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -19,6 +19,19 @@
 #include <stdint.h>
 #include <unistd.h>
 using namespace std;
+
+#ifndef NDEBUG
+#   define ASSERT(condition, message) \
+    do { \
+        if (! (condition)) { \
+            std::cerr << "Assertion `" #condition "` failed in " << __FILE__ \
+                      << " line " << __LINE__ << ": " << message << std::endl; \
+            std::terminate(); \
+        } \
+    } while (false)
+#else
+#   define ASSERT(condition, message) do { } while (false)
+#endif
 
 
 int decodeTip(int K, string UNITIG_FILE="ust_ess_tip.txt"){
@@ -114,64 +127,99 @@ void updateCurrOverlap(char c, string& lastk1, int K){
     }
 }
 
-vector<string> decompressEnclosed(string& s, int& i, string overlapFromParent, int K, ofstream & FOUT){
-    vector<string> S;
-    string sOut;
+void decompressEnclosed(string& s, int& i, string overlapFromParent, int K, ofstream & FOUT){
+    //assert(overlapFromParent.length()==K-1);
+    ASSERT(overlapFromParent.length()==K-1, "The +/- should be replace by a string of length " << K-1 << ", but we receive string of length " << overlapFromParent.length() << "\n");
+
+    string sOut = "";
     string currOverlap;
+
+    stack<tuple<string, string, string> > decstack;
 
     while(i < s.length()){
         char c = s[i++];
         if(c=='['){
-            vector<string> S1 = decompressEnclosed(s, i,currOverlap, K, FOUT);
-            for(int j = 0; j < S1.size(); j++){
-                //S.push_back(S1.at(j));
-            }
+            decstack.push(make_tuple(currOverlap, overlapFromParent, sOut));
+            overlapFromParent=currOverlap;
+            sOut="";
         }else if(c==']'){
-            //S.push_back(sOut);
             FOUT<<">\n"<<sOut<<endl;
-            return S;
+            if(!decstack.empty()){
+                currOverlap =  get<0>(decstack.top());
+                overlapFromParent = get<1>(decstack.top());
+                sOut = get<2>(decstack.top());
+                decstack.pop();
+            }else{
+                return;
+            }
         }else if(c=='+'){
             sOut += overlapFromParent;
             //update currOverlap
             currOverlap = overlapFromParent;
+            //at this point overlapFromParent is useless
+            
         }else if(c=='-'){
             sOut += reverseComplement(overlapFromParent);
             //update currOverlap
             currOverlap = reverseComplement(overlapFromParent);
+            //at this point overlapFromParent is useless
         }else{
             sOut += c;
             updateCurrOverlap(c,currOverlap, K);
             //update currOverlap
         }
-
     }
-    return S;
 }
+
+//vector<string> decompressEnclosed(string& s, int& i, string overlapFromParent, int K, ofstream & FOUT){
+//    vector<string> S;
+//    string sOut;
+//    string currOverlap;
+//
+//    while(i < s.length()){
+//        char c = s[i++];
+//        if(c=='['){
+//            vector<string> S1 = decompressEnclosed(s, i,currOverlap, K, FOUT);
+//            for(int j = 0; j < S1.size(); j++){
+//                //S.push_back(S1.at(j));
+//            }
+//        }else if(c==']'){
+//            //S.push_back(sOut);
+//            FOUT<<">\n"<<sOut<<endl;
+//            return S;
+//        }else if(c=='+'){
+//            sOut += overlapFromParent;
+//            //update currOverlap
+//            currOverlap = overlapFromParent;
+//        }else if(c=='-'){
+//            sOut += reverseComplement(overlapFromParent);
+//            //update currOverlap
+//            currOverlap = reverseComplement(overlapFromParent);
+//        }else{
+//            sOut += c;
+//            updateCurrOverlap(c,currOverlap, K);
+//            //update currOverlap
+//        }
+//
+//    }
+//    return S;
+//}
 
 vector<string> decompress(string& s, int K, ofstream & FOUT){
     vector<string> S;
     string sOut;
     string currOverlap;
-
     int i = 0;
     while(i < s.length()){
         char c = s[i++];
            if(c=='['){
-               vector<string> S1 = decompressEnclosed(s, i,currOverlap, K, FOUT);
-               for(int j = 0; j < S1.size(); j++){
-                   //S.push_back(S1.at(j));
-               }
+               decompressEnclosed(s, i,currOverlap, K, FOUT);
            }else{
                sOut += c;
-               updateCurrOverlap(c, currOverlap, K);
-               //update currOverlap
+               updateCurrOverlap(c, currOverlap, K);  //update currOverlap
            }
     }
-
-
    // cout<< "Complete conversion of: " <<s << endl;
-
-    //S.push_back(sOut);
     FOUT<<">\n"<<sOut<<endl;
     return S;
 }
