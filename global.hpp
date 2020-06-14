@@ -434,6 +434,9 @@ int maximumUnitigLength()
 
 int read_unitig_file_abs(const string &unitigFileName, vector<unitig_struct_t> &unitigs)
 {
+    
+
+    
     ifstream unitigFile;
     unitigFile.open(unitigFileName);
 
@@ -529,28 +532,7 @@ int read_unitig_file_abs(const string &unitigFileName, vector<unitig_struct_t> &
             {
                 unitig_struct.sequence = unitig_struct.sequence + line;
                 //cout<<unitig_struct.sequence<<endl;
-
-                //ADDED VARI
-                if (VARIMODE)
-                {
-                    //if(unitig_struct.ln >= 2*(K-1)){
-                    //}
-                    //string thepref = pref(unitig_struct.sequence, K);
-                    //string thesuf =suf(unitig_struct.sequence, K);
-                    //variAllStrings.insert(thepref);
-                    //variAllStrings.insert(thesuf);
-
-                    //variPreFile<<thepref<<endl;
-                    //variPreRCFile<<reverseComplement(thepref)<<endl;
-
-                    //variSufFile<<thesuf<<endl;
-                    //variSufRCFile<<reverseComplement(thesuf)<<endl;
-
-                    //variAllStringsFile<<">\n"<<thepref<<endl;
-                    //variAllStringsFile<<">\n"<<thesuf<<endl;
-                    //variIntFile<<unitig_struct.serial<<endl;
-                }
-
+                
                 unitigs.push_back(unitig_struct);
             }
             else
@@ -562,23 +544,11 @@ int read_unitig_file_abs(const string &unitigFileName, vector<unitig_struct_t> &
     } while (doCont);
 
     unitigFile.close();
-
-    //    variPreFile.close();
-    //    variSufFile.close();
-    //    variPreRCFile.close();
-    //    variSufRCFile.close();
-    //variIntFile.close();
-    if (VARIMODE)
-    {
-        //         for(string s: variAllStrings){
-        //             variAllStringsFile<<">\n"<<s<<endl;
-        //         }
-        //         variAllStrings.clear();
-    }
-    // variAllStringsFile.close();
-
+    
+    
+    
     cout << "Finished reading input unitig file (bcalm2 file)." << endl;
-    //exit(1);
+
     return EXIT_SUCCESS;
 }
 

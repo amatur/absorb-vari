@@ -9,7 +9,6 @@
 #include <sstream>
 
 
-
 class SCCGraph
 {
 public:
@@ -95,7 +94,7 @@ public:
     void recursiveWalkStringMakerOld(int startWalkIndex, int depth, int Kpass, ofstream &);
 
 
-    void iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, vector<char>& color, ofstream& FOUT);
+    void iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, vector<char>& color, ofstream& FOUT, ofstream& nostrfile);
     
     
     void tipAbsorbedOutputter();
@@ -104,6 +103,18 @@ public:
     void postorder(int i, map<int, vector<int > >& walkGraph, vector<bool>& visited, queue<int>& q);
     string* constructedStrings;
 
+    
+    void printFormattedPattern(int uid, char preOrSuf, ofstream &FOUT);
+    void intFileToESSFile();
+    void splitToFourPartNodeSign();
+    
+    
+    ofstream cp;
+    ofstream cP;
+    ofstream cs;
+    ofstream cS;
+    ofstream cx;
+    
     AbsorbGraph(vector<MyTypes::fourtuple>& sorter){
 //        SCCGraph g1(5);
 //        g1.addEdge(0, 1);
@@ -2977,16 +2988,132 @@ void AbsorbGraph::recursiveWalkStringMakerOld(int startWalkIndex, int depth, int
 }
 
 
+void AbsorbGraph::printFormattedPattern(int uid, char preOrSuf, ofstream &FOUT){
+    
+    if(uid==-1){
+        //FOUT<<(preOrSuf);
+    }else{
+        if(preOrSuf == 'p') {
+            cp << uid <<endl;
+        }
+        if(preOrSuf == 'P') cP << uid <<endl;
+        if(preOrSuf == 's') cs << uid <<endl;
+        if(preOrSuf == 'S') cS << uid <<endl;
+        if(preOrSuf == 'x') cx << uid <<endl;
+        if(preOrSuf == 'f') {
+            cp << uid <<endl;
+            cP << uid <<endl;
+        }
+        //FOUT<<(preOrSuf) << ":"  << (uid) <<  ":" ;
+        
+    }
+    FOUT<<(preOrSuf);
+}
 
-void get34(){
+void AbsorbGraph::splitToFourPartNodeSign(){
+    //splitToFourPartNodeSign
+    
+    ifstream unitigFile(UNITIG_FILE);
+    
+    int uid = 0;
+    ofstream sixColFile("sixColFile.txt");
+    string tp;
+    while(getline(unitigFile, tp)){ //read data from file object and put it into string.
+        getline(unitigFile, tp);
+        if(nodeSign[uid] == false){
+            tp = reverseComplement(tp);
+        }
+        
+        string splitx = "-";
+        if(tp.length()>2*(K-1)){
+            splitx = splitX(tp, K);
+        }
+        
+        sixColFile<<uid<<" "<<pref(tp, K)<<" "<<cutPref(tp, K)<<" "<<suf(tp, K)<<" "<<cutSuf(tp, K)<<" "<<splitx<<endl;
+        uid++;
+    }
+    unitigFile.close();
+    sixColFile.close();
+
+    
+    if(system("mkdir -p tmp/") != 0) exit(3);
+
+    if(system("export TMPDIR=$PWD/tmp/") != 0) exit(3);
+    //sort the mega file: prepare for join
+    if(system("sort -t' ' -k1 -o sixColFile.sorted sixColFile.txt")  != 0) exit(3);
+    
+    //sort the prefix file
+    if(system("awk \'{print $0 \" \" NR-1}\' preNumFile.txt | sort -t' ' -k1 -o preNumFile.sorted; join -t' ' -o 0,1.2,2.2 preNumFile.sorted sixColFile.sorted | sort -t' ' -n -k2 -o preNumFile.txt; cut -d' ' -f3 preNumFile.txt > preNumFile.sorted; rm -rf preNumFile.txt") != 0) exit(3);
+    //system("join -o 0,1.2,2.2 cutpreNumFile.sorted sixColFile.txt | sort -t' ' -n -k2 -o cutpreNumFile.txt"); //debug
+    
+    if(system("awk \'{print $0 \" \" NR-1}\' cutpreNumFile.txt | sort -t' ' -k1 -o cutpreNumFile.sorted; join -t' ' -o 0,1.2,2.3 cutpreNumFile.sorted sixColFile.sorted | sort -t' ' -n -k2 -o cutpreNumFile.txt; cut -d' ' -f3 cutpreNumFile.txt > cutpreNumFile.sorted ; rm -rf cutpreNumFile.txt") != 0) exit(3);
+    
+    if(system("awk \'{print $0 \" \" NR-1}\' sufNumFile.txt | sort -t' ' -k1 -o sufNumFile.sorted; join -t' ' -o 0,1.2,2.4 sufNumFile.sorted sixColFile.sorted | sort -t' ' -n -k2 -o sufNumFile.txt; cut -d' ' -f3 sufNumFile.txt > sufNumFile.sorted; rm -rf sufNumFile.txt") != 0) exit(3);
+    
+    if(system("awk \'{print $0 \" \" NR-1}\' cutsufNumFile.txt | sort -t' ' -k1 -o cutsufNumFile.sorted; join  -t' ' -o 0,1.2,2.5 cutsufNumFile.sorted sixColFile.sorted | sort -t' ' -n -k2 -o cutsufNumFile.txt; cut -d' ' -f3 cutsufNumFile.txt > cutsufNumFile.sorted; rm -rf cutsufNumFile.txt") != 0) exit(3);
+
+
+    if(system("awk \'{print $0 \" \" NR-1}\' xNumFile.txt | sort -t' ' -k1 -o xNumFile.sorted; join -t' ' -o 0,1.2,2.6 xNumFile.sorted sixColFile.sorted | sort -t' ' -n -k2 -o xNumFile.txt; cut -d' ' -f3 xNumFile.txt > xNumFile.sorted; rm -rf xNumFile.txt") != 0) exit(3);
+
+    
+    ifstream cpI("preNumFile.sorted");
+    ifstream cPI("cutpreNumFile.sorted");
+    ifstream csI("sufNumFile.sorted");
+    ifstream cSI("cutsufNumFile.sorted");
+    ifstream cxI("xNumFile.sorted");
+    ofstream finalESS("final.ess");
+    
+    char ch;
+    ifstream fin("intESSFile.txt");
+    while (fin >> noskipws >> ch) {
+        string line;
+        if(ch=='p'){
+            std::getline(cpI, line);
+            //line.erase(line.find_last_not_of("\t\n\v\f\r ") + 1);
+            finalESS<<line;
+        }else if(ch=='P'){
+            std::getline(cPI, line);
+            //line.erase(line.find_last_not_of("\t\n\v\f\r ") + 1);
+            finalESS<<line;
+        }else if(ch=='s'){
+            std::getline(csI, line);
+            //line.erase(line.find_last_not_of("\t\n\v\f\r ") + 1);
+            finalESS<<line;
+        }else if(ch=='S'){
+            std::getline(cSI, line);
+            //line.erase(line.find_last_not_of("\t\n\v\f\r ") + 1);
+            finalESS<<line;
+        }else if(ch=='x'){
+            std::getline(cxI, line);
+            //line.erase(line.find_last_not_of("\t\n\v\f\r ") + 1);
+            finalESS<<line;
+        }else if(ch=='f'){
+            std::getline(cpI, line);
+            finalESS<<line;
+            std::getline(cPI, line);
+            //line.erase(line.find_last_not_of("\t\n\v\f\r ") + 1);
+            finalESS<<line;
+        }else{
+            finalESS<<ch;
+        }
+    }
+    
+    cpI.close();
+    cPI.close();
+    csI.close();
+    cSI.close();
+    cxI.close();
+    fin.close();
+    finalESS.close();
     
 }
 
-void get12(){
-    
-}
-void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, vector<char>& color, ofstream& tipFile)
+
+
+void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, vector<char>& color, ofstream& tipFile, ofstream &tipNoStrFile)
 {
+    
+    
     stack<int> recurStak;//startWalkIndex
     recurStak.push(startWalkIndex2);
     
@@ -3068,10 +3195,11 @@ void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, 
             //walkstarting ####
             if( isItWalkStarting(uid)){
                 if(absorbedCategory[uid]=='0'){ //not absorbed
-                    if(unitigString.length()<2*(K-1)){
+                    if(unitigString.length()<=2*(K-1)){
                         //PRECHILD
                         if(color[currSorterIndex]=='w'){
                             tipFile<<unitigString;
+                            printFormattedPattern(uid, 'f', tipNoStrFile);
                             //walkString += unitigString;
                         }
                         
@@ -3079,6 +3207,7 @@ void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, 
                         //a
                         if(color[currSorterIndex]=='w'){
                             tipFile<<splitA(unitigString, Kpass);
+                            printFormattedPattern(uid, 'p', tipNoStrFile);
                             
                             //CHILD1
                             while(!stType34.empty()){
@@ -3091,6 +3220,8 @@ void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, 
                         if(color[currSorterIndex]=='g'){
                             tipFile<<splitX(unitigString, Kpass);
                             tipFile<<splitB(unitigString, Kpass);
+                            
+                            printFormattedPattern(uid, 'P', tipNoStrFile);
                         }
                     }
                 }else{
@@ -3099,16 +3230,20 @@ void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, 
                     
                     if(color[currSorterIndex]=='w'){
                         tipFile<<"[";
+                        printFormattedPattern(-1, '[', tipNoStrFile);
                     }
                     
                     
-                    if(unitigString.length()>=2*(K-1)){
+                    if(unitigString.length()>2*(K-1)){
                         string sign = (absorbedCategory[uid]=='2' or absorbedCategory[uid]=='4')?"-":"+";
                         if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
                             //walkString += splitA(unitigString, Kpass);
                             //walkString += splitX(unitigString, Kpass);
                             string apart = cutSuf(unitigString, Kpass);
-                            if(color[currSorterIndex]=='w') tipFile<<pref(apart, Kpass);
+                            if(color[currSorterIndex]=='w') {
+                                tipFile<<pref(apart, Kpass);
+                                printFormattedPattern(uid, 'p', tipNoStrFile);
+                            }
                             
                             if(color[currSorterIndex]=='w'){
                                 while(!stType34.empty()){
@@ -3116,33 +3251,57 @@ void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, 
                                     stType34.pop();
                                 }
                             }
-                            if(color[currSorterIndex]=='g') tipFile<<cutPref(apart, Kpass);
-                            if(color[currSorterIndex]=='g') tipFile<<sign;
+                            if(color[currSorterIndex]=='g') {
+                                tipFile<<cutPref(apart, Kpass);
+                                tipFile<<sign;
+                                
+                                printFormattedPattern(uid,  'x', tipNoStrFile);
+                                printFormattedPattern(-1,  sign[0], tipNoStrFile);
+                            }
+                            
                             
                         }else{
-                            if(color[currSorterIndex]=='w') tipFile<<sign;
-                            
-                            if(color[currSorterIndex]=='w'){
+                            if(color[currSorterIndex]=='w') {
+                                tipFile<<sign;
+                                printFormattedPattern(-1,  sign[0], tipNoStrFile);
+                                
                                 while(!stType34.empty()){
                                     recurStak.push(sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId]);
                                     stType34.pop();
                                 }
                             }
-                            if(color[currSorterIndex]=='g') tipFile<<splitX(unitigString, Kpass);
-                            if(color[currSorterIndex]=='g') tipFile<<splitB(unitigString, Kpass);
+                            
+                            if(color[currSorterIndex]=='g') {
+                                tipFile<<splitX(unitigString, Kpass);
+                                tipFile<<splitB(unitigString, Kpass);
+                                
+                                printFormattedPattern(uid,  'P', tipNoStrFile);
+                            }
+                            
                         }
                     }else{
                         string sign = (absorbedCategory[uid]=='2' or absorbedCategory[uid]=='4')?"-":"+";
                         if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
                             //walkString += splitA(unitigString, Kpass);
                             //swalkString += splitX(unitigString, Kpass);
-                            if(color[currSorterIndex]=='w') tipFile<<cutSuf(unitigString, Kpass);
-                            if(color[currSorterIndex]=='w') tipFile<<sign;
+                            if(color[currSorterIndex]=='w') {
+                                tipFile<<cutSuf(unitigString, Kpass);
+                                tipFile<<sign;
+                                
+                                printFormattedPattern(uid, 'S', tipNoStrFile);
+                                printFormattedPattern(-1,  sign[0], tipNoStrFile);
+                            }
+                            
                             
                         }else{
-                            if(color[currSorterIndex]=='w') tipFile<<sign;
-                            if(color[currSorterIndex]=='w') tipFile<<splitX(unitigString, Kpass);
-                            if(color[currSorterIndex]=='w') tipFile<<splitB(unitigString, Kpass);
+                            if(color[currSorterIndex]=='w') {
+                                tipFile<<sign;
+                                tipFile<<splitX(unitigString, Kpass);
+                                tipFile<<splitB(unitigString, Kpass);
+                                
+                                printFormattedPattern(-1, sign[0], tipNoStrFile);
+                                printFormattedPattern(uid, 'P', tipNoStrFile);
+                            }
                         }
                     }
                     
@@ -3166,8 +3325,13 @@ void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, 
                         }
                     }
                     //PRINT-PART2
-                    if(color[currSorterIndex]=='g') tipFile<<splitX(unitigString, Kpass);
-                    if(color[currSorterIndex]=='g') tipFile<<splitB(unitigString, Kpass);
+                    if(color[currSorterIndex]=='g'){
+                        tipFile<<splitX(unitigString, Kpass);
+                        tipFile<<splitB(unitigString, Kpass);
+                        
+                        printFormattedPattern(uid, 'P', tipNoStrFile);
+                        
+                    }
                     //12
                     //PRINT-PART3
                     
@@ -3198,7 +3362,10 @@ void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, 
             
             if(currSorterIndex+1 == sorter.size() or get<1>(sorter[currSorterIndex+1]) != finalWalkId){
                 
-                if(color[currSorterIndex]=='b' && absorbed[finalWalkId] == true) tipFile<<"]";
+                if(color[currSorterIndex]=='b' && absorbed[finalWalkId] == true) {
+                    tipFile<<"]";
+                    printFormattedPattern(-1,  ']', tipNoStrFile);
+                }
                 
                 isItAPrintedWalk[finalWalkId] = true;
                 if(color[currSorterIndex] == 'b') break;
@@ -3211,6 +3378,15 @@ void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, 
 
 void AbsorbGraph::tipAbsorbedOutputter(){
     tipFile.open(ofileTipOutput);
+    cp.open("preNumFile.txt");
+    cP.open("cutpreNumFile.txt");
+    cs.open("sufNumFile.txt");
+    cS.open("cutsufNumFile.txt");
+    cx.open("xNumFile.txt");
+    
+    
+    ofstream tipNoStrFile;
+    tipNoStrFile.open("intESSFile.txt");
     vector<char> color(sorter.size(), 'w');
     
     vector<char> part(sorter.size(), '1');
@@ -3230,17 +3406,31 @@ void AbsorbGraph::tipAbsorbedOutputter(){
         depth = 0;
 
         tipFile<<">\n";
+        tipNoStrFile<<">\n";
         //iterSpellTested(it, depth, K, color, 0);
         int Kpass = K;
         int & startWalkIndex2 = it;
-        iterSpellEfficient( startWalkIndex2,  depth,  Kpass, color, tipFile);
+        iterSpellEfficient( startWalkIndex2,  depth,  Kpass, color, tipFile, tipNoStrFile);
         
         //walkString = constructedStrings[get<1>(sorter[it])];
         
         V_oneabsorb++;
         tipFile<<"\n";
+        tipNoStrFile<<"\n";
     }
+    
+    
+    cp.close();
+    cs.close();
+    cS.close();
+    cP.close();
+    cx.close();
+    tipNoStrFile.close();
     tipFile.close();
+    
+    
+    
+    splitToFourPartNodeSign();
 }
 
 
@@ -3479,8 +3669,7 @@ void absorptionManager(vector<MyTypes::fourtuple>& sorter) {
 
 
     AbsorbGraph abs(sorter); //initialize all the graphs and other data structures
-
-
+   
     if(MODE_ABSORPTION_NOTIP ){
 
 
