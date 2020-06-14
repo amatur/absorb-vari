@@ -53,7 +53,7 @@ public:
     map<int, stack<edge_t> > absorbGraphCycleRemoved;
 
 
-    bool EARLYABSORB = false;
+    bool EARLYABSORB = true;
 
     SCCGraph* g;
     bool* absorbed;
@@ -1567,6 +1567,7 @@ void AbsorbGraph::iterSpellTested(int startWalkIndex2, int depth, int Kpass, vec
                         string signs;
                         if(absorbedCategory[uid]=='1') signs="+";
                         else if(absorbedCategory[uid]=='4') signs="-";
+                        
                         walkString = cutSuf(walkString, Kpass) + signs + cutPref(unitigString, Kpass);
                     }
 
@@ -1574,8 +1575,9 @@ void AbsorbGraph::iterSpellTested(int startWalkIndex2, int depth, int Kpass, vec
                         string signs;
                         if(absorbedCategory[uid]=='3') signs="+";
                         else if(absorbedCategory[uid]=='2') signs="-";
-                        walkString = cutSuf(walkString, Kpass) + unitigString;
+                        walkString = cutSuf(walkString, Kpass) +  unitigString;
                         walkString = cutSuf(walkString, Kpass) + signs;
+                        
                     }
                 }
 
@@ -3024,8 +3026,8 @@ void AbsorbGraph::splitToFourPartNodeSign(){
             tp = reverseComplement(tp);
         }
         
-        string splitx = "-";
-        if(tp.length()>2*(K-1)){
+        string splitx = "";
+        if(tp.length()>=2*(K-1)){
             splitx = splitX(tp, K);
         }
         
@@ -3065,6 +3067,7 @@ void AbsorbGraph::splitToFourPartNodeSign(){
     
     char ch;
     ifstream fin("intESSFile.txt");
+    
     while (fin >> noskipws >> ch) {
         string line;
         if(ch=='p'){
@@ -3098,6 +3101,9 @@ void AbsorbGraph::splitToFourPartNodeSign(){
         }
     }
     
+    
+    
+    
     cpI.close();
     cPI.close();
     csI.close();
@@ -3105,6 +3111,10 @@ void AbsorbGraph::splitToFourPartNodeSign(){
     cxI.close();
     fin.close();
     finalESS.close();
+    
+    //if(system("cat final.ess > fa.ess")!=0) exit(3);
+    string cmdn = "sed -e 's/[ACGT]\\{"+to_string(K-1)+"\\}r//g' final.ess > fa.ess";
+    if(system(cmdn.c_str())!=0) exit(3);
     
 }
 
@@ -3195,7 +3205,15 @@ void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, 
             //walkstarting ####
             if( isItWalkStarting(uid)){
                 if(absorbedCategory[uid]=='0'){ //not absorbed
-                    if(unitigString.length()<=2*(K-1)){
+                    //earlyAbsorb-NEW
+                    if(color[currSorterIndex]=='w' && absorbed[finalWalkId]){
+                        isThisAbsorbedWalk=true;
+                        tipFile<<"[";
+                        printFormattedPattern(-1, '[', tipNoStrFile);
+                    }
+                    
+                    
+                    if(unitigString.length()<2*(K-1)){
                         //PRECHILD
                         if(color[currSorterIndex]=='w'){
                             tipFile<<unitigString;
@@ -3234,7 +3252,7 @@ void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, 
                     }
                     
                     
-                    if(unitigString.length()>2*(K-1)){
+                    if(unitigString.length()>=2*(K-1)){
                         string sign = (absorbedCategory[uid]=='2' or absorbedCategory[uid]=='4')?"-":"+";
                         if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
                             //walkString += splitA(unitigString, Kpass);
@@ -3343,6 +3361,41 @@ void AbsorbGraph::iterSpellEfficient(int startWalkIndex2, int depth, int Kpass, 
                     }
                 }
                 
+                
+                //earlyAbsorb-NEW
+                if(absorbedCategory[uid]!='0'){
+                    assert(absorbed[oldToNew[uid].finalWalkId]==true);
+                    isThisAbsorbedWalk=true;
+                    walkAbsorbedCategory =absorbedCategory[uid];
+                    assert(stType34.empty());
+                    assert(stType12.empty());
+
+                    if(color[currSorterIndex]=='w') {
+                        if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
+                            string signs;
+                            if(absorbedCategory[uid]=='1') signs="+";
+                            else if(absorbedCategory[uid]=='4') signs="-";
+                            //walkString = cutSuf(walkString, Kpass) + signs + cutPref(unitigString, Kpass);
+                            
+                            printFormattedPattern(-1, 'r', tipNoStrFile);
+                            printFormattedPattern(-1, signs[0], tipNoStrFile);
+                            printFormattedPattern(uid, 'P', tipNoStrFile);
+                        }
+
+                        if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3' ){
+                            string signs;
+                            if(absorbedCategory[uid]=='3') signs="+";
+                            else if(absorbedCategory[uid]=='2') signs="-";
+                            
+                            printFormattedPattern(-1, 'r', tipNoStrFile);
+                            printFormattedPattern(uid, 'S', tipNoStrFile);
+                            printFormattedPattern(-1, signs[0], tipNoStrFile);
+                            //walkString = cutSuf(walkString, Kpass) + cutSuf(unitigString, Kpass) + signs;
+                        }
+                    }
+                    
+                }
+                
             }
             
             
@@ -3383,14 +3436,14 @@ void AbsorbGraph::tipAbsorbedOutputter(){
     cs.open("sufNumFile.txt");
     cS.open("cutsufNumFile.txt");
     cx.open("xNumFile.txt");
-    
-    
+
+
     ofstream tipNoStrFile;
     tipNoStrFile.open("intESSFile.txt");
     vector<char> color(sorter.size(), 'w');
-    
+
     vector<char> part(sorter.size(), '1');
-    
+
     for(int i = 0; i<countNewNode; i++){
         isItAPrintedWalk[i] = false;
     }
@@ -3411,15 +3464,15 @@ void AbsorbGraph::tipAbsorbedOutputter(){
         int Kpass = K;
         int & startWalkIndex2 = it;
         iterSpellEfficient( startWalkIndex2,  depth,  Kpass, color, tipFile, tipNoStrFile);
-        
+
         //walkString = constructedStrings[get<1>(sorter[it])];
-        
+
         V_oneabsorb++;
         tipFile<<"\n";
         tipNoStrFile<<"\n";
     }
-    
-    
+
+
     cp.close();
     cs.close();
     cS.close();
@@ -3427,9 +3480,9 @@ void AbsorbGraph::tipAbsorbedOutputter(){
     cx.close();
     tipNoStrFile.close();
     tipFile.close();
-    
-    
-    
+
+
+
     splitToFourPartNodeSign();
 }
 
