@@ -1,6 +1,7 @@
+// VERSION 2.0
+
 //
-//  decoder.h
-//  bcl
+//  decoder.hpp
 //
 //  Created by Amatur Rahman on 28/11/19.
 //  Copyright © 2019 psu. All rights reserved.
@@ -18,6 +19,8 @@
 #include <assert.h>
 #include <stdint.h>
 #include <unistd.h>
+
+#include "misc.hpp"
 using namespace std;
 
 #ifndef NDEBUG
@@ -33,6 +36,28 @@ using namespace std;
 #   define ASSERT(condition, message) do { } while (false)
 #endif
 
+
+//
+//string reverseComplement(string base)
+//{
+//    size_t len = base.length();
+//    char *out = new char[len + 1];
+//    out[len] = '\0';
+//    for (int i = 0; i < len; i++)
+//    {
+//        if (base[i] == 'A')
+//            out[len - i - 1] = 'T';
+//        else if (base[i] == 'C')
+//            out[len - i - 1] = 'G';
+//        else if (base[i] == 'G')
+//            out[len - i - 1] = 'C';
+//        else if (base[i] == 'T')
+//            out[len - i - 1] = 'A';
+//    }
+//    string outString(out);
+//    free(out);
+//    return outString;
+//}
 
 int decodeTip(int K, string UNITIG_FILE="ust_ess_tip.txt"){
     ifstream unitigFile;
