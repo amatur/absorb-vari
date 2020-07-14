@@ -11,8 +11,6 @@ jobs:
     name: Upload Release Asset
     runs-on: ubuntu-latest
     steps:
-    - name: Installing SUDO
-        run: 'apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*'
     - name: Installing GCC
         run: 'apt-get update && apt-get install -y build-essential wget zlib1g zlib1g-dev'
     - name: Installing Git
