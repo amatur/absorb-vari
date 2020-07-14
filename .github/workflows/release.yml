@@ -11,12 +11,7 @@ jobs:
     name: Upload Release Asset
     runs-on: ubuntu-latest
     steps:
-    - name: Installing GCC
-        run: 'apt-get update && apt-get install -y build-essential wget zlib1g zlib1g-dev'
-    - name: Installing Git
-        run: 'apt-get update && apt-get install -y git'
-
-    - name: Install CMAKE
+        - name: Install CMAKE
         run: |
           wget https://cmake.org/files/v3.10/cmake-3.10.2-Linux-x86_64.tar.gz
           tar -xvzf cmake-3.10.2-Linux-x86_64.tar.gz
@@ -31,10 +26,8 @@ jobs:
           ln -s $DIR/cmake-3.10.2-Linux-x86_64/bin/ctest /usr/bin/ctest
     - name: Install CPPUnit
         run: 'apt-get update && sudo apt-get install -y libcppunit-dev'
-
     - name: Checkout code
       uses: actions/checkout@v2
-
     - name: Compiling
         run: sh INSTALL
     - name: Build project # This would actually build your project, using zip for an example artifact
