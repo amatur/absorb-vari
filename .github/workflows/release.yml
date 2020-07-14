@@ -11,21 +11,6 @@ jobs:
     name: Upload Release Asset
     runs-on: ubuntu-latest
     steps:
-        - name: Install CMAKE
-        run: |
-          wget https://cmake.org/files/v3.10/cmake-3.10.2-Linux-x86_64.tar.gz
-          tar -xvzf cmake-3.10.2-Linux-x86_64.tar.gz
-          chmod +x ./cmake-3.10.2-Linux-x86_64/bin/ccmake
-          chmod +x ./cmake-3.10.2-Linux-x86_64/bin/cmake
-          chmod +x ./cmake-3.10.2-Linux-x86_64/bin/cpack
-          chmod +x ./cmake-3.10.2-Linux-x86_64/bin/ctest
-          DIR=$(pwd)
-          ln -s $DIR/cmake-3.10.2-Linux-x86_64/bin/ccmake /usr/bin/ccmake
-          ln -s $DIR/cmake-3.10.2-Linux-x86_64/bin/cmake /usr/bin/cmake
-          ln -s $DIR/cmake-3.10.2-Linux-x86_64/bin/cpack /usr/bin/cpack
-          ln -s $DIR/cmake-3.10.2-Linux-x86_64/bin/ctest /usr/bin/ctest
-    - name: Install CPPUnit
-        run: 'apt-get update && sudo apt-get install -y libcppunit-dev'
     - name: Checkout code
       uses: actions/checkout@v2
     - name: Compiling
