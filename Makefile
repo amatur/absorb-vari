@@ -3,10 +3,10 @@ CFLAGS=-w -std=c++11 -O3
 
 all: make_directories essC essD
 
-essCompress:
+essC:
 	$(CC) $(CFLAGS) -o bin/essC src/ess.cpp
 
-essDecompress:
+essD:
 	$(CC) $(CFLAGS) -o bin/essD src/decoder.cpp
 
 .PHONY: make_directories
