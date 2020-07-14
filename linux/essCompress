@@ -5,7 +5,7 @@ validateset=0
 TestInstallation()
 {
     mkdir -p test
-    essCompress_main ../examples/cdbg/chol_k11.unitigs.fa 11 1 test/
+    essCompress_main ../examples/cdbg/chol_k11.unitigs.fa 11 1 0 test/
 
     if [ $? -eq 0 ]
     then
