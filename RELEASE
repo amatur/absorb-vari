@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -e
+export PATH="$PWD/linux:$PATH"
+essCompress -h
+essCompress -T
+#source ~/.bashrc
